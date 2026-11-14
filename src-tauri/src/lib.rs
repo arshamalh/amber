@@ -1,26 +1,52 @@
-//! Amber's Rust core. The web UI calls the commands below; it never reads or
-//! writes files on its own.
+//! Amber's Rust core. The web UI calls the commands in `commands.rs`; it
+//! never reads or writes files on its own.
 
+mod commands;
+mod config;
+mod git;
+mod index;
+mod links;
+mod markdown;
+mod settings;
 mod typst;
 mod uri;
 mod vault;
+mod watcher;
 
+use std::path::PathBuf;
 use std::sync::Mutex;
 
-use serde::Serialize;
-use tauri::ipc::Channel;
-use tauri::{Manager, RunEvent, State};
-use tauri_plugin_dialog::DialogExt;
+use tauri::http::{header, Response, StatusCode};
+use tauri::{Manager, RunEvent};
 
-use vault::{NoteFormat, Vault, VaultError};
+use index::ChestIndex;
+use settings::Settings;
+use vault::{Vault, VaultError};
 
-#[derive(Default)]
-struct AppState {
+pub struct AppState {
     vault: Mutex<Option<Vault>>,
+    /// Folder of the open chest. Everything chest-scoped checks against it.
+    chest: Mutex<Option<String>>,
+    index: Mutex<Option<ChestIndex>>,
+    watcher: Mutex<Option<watcher::VaultWatcher>>,
     engine: tokio::sync::Mutex<Option<typst::Engine>>,
+    settings: Mutex<Settings>,
+    settings_path: PathBuf,
 }
 
 impl AppState {
+    fn new(settings_path: PathBuf) -> Self {
+        Self {
+            vault: Mutex::default(),
+            chest: Mutex::default(),
+            index: Mutex::default(),
+            watcher: Mutex::default(),
+            engine: tokio::sync::Mutex::default(),
+            settings: Mutex::new(Settings::load(&settings_path)),
+            settings_path,
+        }
+    }
+
     fn vault(&self) -> Result<Vault, VaultError> {
         self.vault
             .lock()
@@ -28,157 +54,98 @@ impl AppState {
             .clone()
             .ok_or(VaultError::NotOpen)
     }
-}
 
-type CmdResult<T> = Result<T, String>;
-
-fn err(e: impl ToString) -> String {
-    e.to_string()
-}
-
-#[derive(Serialize)]
-#[serde(rename_all = "camelCase")]
-struct VaultInfo {
-    name: String,
-    root_uri: String,
-}
-
-#[derive(Serialize)]
-#[serde(rename_all = "camelCase")]
-struct Note {
-    path: String,
-    format: NoteFormat,
-    /// LSP document URI.
-    uri: String,
-    /// Absolute path, only for handing to the Typst engine (preview).
-    engine_path: String,
-}
-
-#[tauri::command]
-async fn pick_vault(app: tauri::AppHandle) -> CmdResult<Option<String>> {
-    let (tx, rx) = tokio::sync::oneshot::channel();
-    app.dialog().file().pick_folder(move |p| {
-        let _ = tx.send(p);
-    });
-    let picked = rx.await.map_err(err)?;
-    Ok(picked
-        .and_then(|p| p.into_path().ok())
-        .map(|p| p.to_string_lossy().into_owned()))
-}
-
-/// A vault to open on launch: the first CLI argument, else `$AMBER_VAULT`.
-#[tauri::command]
-fn startup_vault() -> Option<String> {
-    std::env::args()
-        .nth(1)
-        .or_else(|| std::env::var("AMBER_VAULT").ok())
-        .filter(|p| std::path::Path::new(p).is_dir())
-}
-
-#[tauri::command]
-async fn open_vault(path: String, state: State<'_, AppState>) -> CmdResult<VaultInfo> {
-    let v = Vault::open(&path).map_err(err)?;
-    let info = VaultInfo {
-        name: v
-            .root()
-            .file_name()
-            .map(|n| n.to_string_lossy().into_owned())
-            .unwrap_or_default(),
-        root_uri: uri::file_uri(v.root()),
-    };
-    *state.vault.lock().unwrap() = Some(v);
-    Ok(info)
-}
-
-#[tauri::command]
-fn list_notes(state: State<'_, AppState>) -> CmdResult<Vec<Note>> {
-    let v = state.vault().map_err(err)?;
-    v.list_notes()
-        .map_err(err)?
-        .into_iter()
-        .map(|n| {
-            let abs = v.absolute(&n.path).map_err(err)?;
-            Ok(Note {
-                uri: uri::file_uri(&abs),
-                engine_path: abs.to_string_lossy().into_owned(),
-                path: n.path,
-                format: n.format,
-            })
-        })
-        .collect()
-}
-
-#[tauri::command]
-fn read_note(path: String, state: State<'_, AppState>) -> CmdResult<String> {
-    state.vault().and_then(|v| v.read_note(&path)).map_err(err)
-}
-
-#[tauri::command]
-fn write_note(path: String, content: String, state: State<'_, AppState>) -> CmdResult<()> {
-    state
-        .vault()
-        .and_then(|v| v.write_note(&path, &content))
-        .map_err(err)
-}
-
-/// What the engine channel carries to the UI.
-#[derive(Clone, Serialize)]
-#[serde(tag = "kind", content = "data", rename_all = "lowercase")]
-enum EngineEvent {
-    /// One JSON-RPC message from the language server.
-    Message(String),
-    /// The server process ended.
-    Exit,
-}
-
-/// Starts (or restarts) the Typst engine for the open vault. LSP messages
-/// from the server stream back through `channel`.
-#[tauri::command]
-async fn engine_start(
-    channel: Channel<EngineEvent>,
-    state: State<'_, AppState>,
-) -> CmdResult<String> {
-    let v = state.vault().map_err(err)?;
-    let mut slot = state.engine.lock().await;
-    if let Some(old) = slot.take() {
-        old.kill().await;
+    fn chest(&self) -> Result<String, VaultError> {
+        self.chest
+            .lock()
+            .unwrap()
+            .clone()
+            .ok_or(VaultError::NoChest)
     }
-    let exit_channel = channel.clone();
-    let engine = typst::Engine::spawn(
-        v.root(),
-        move |msg| {
-            let _ = channel.send(EngineEvent::Message(msg));
-        },
-        move || {
-            let _ = exit_channel.send(EngineEvent::Exit);
-        },
-    )
-    .map_err(err)?;
-    *slot = Some(engine);
-    Ok(typst::PINNED_VERSION.trim().to_owned())
+
+    /// The vault plus a check that `rel` is inside the open chest.
+    fn scoped(&self, rel: &str) -> Result<Vault, VaultError> {
+        vault::ensure_in_chest(rel, &self.chest()?)?;
+        self.vault()
+    }
+
+    fn with_settings(&self, f: impl FnOnce(&mut Settings)) {
+        let mut s = self.settings.lock().unwrap();
+        f(&mut s);
+        if let Err(e) = s.save(&self.settings_path) {
+            eprintln!("[amber] could not save settings: {e}");
+        }
+    }
 }
 
-#[tauri::command]
-async fn engine_send(message: String, state: State<'_, AppState>) -> CmdResult<()> {
-    let mut slot = state.engine.lock().await;
-    let engine = slot.as_mut().ok_or("the Typst engine is not running")?;
-    engine.send(&message).await.map_err(err)
+/// Serves vault files to the UI at `amberfile://localhost/<encoded path>`
+/// (`http://amberfile.localhost/...` on Windows), read-only, for images in
+/// Markdown previews.
+fn serve_vault_file(app: &tauri::AppHandle, uri_path: &str) -> Response<Vec<u8>> {
+    let rel = uri::percent_decode(uri_path.trim_start_matches('/'));
+    let result = app
+        .state::<AppState>()
+        .vault()
+        .and_then(|v| v.read_file(&rel));
+    match result {
+        Ok(bytes) => Response::builder()
+            .header(header::CONTENT_TYPE, uri::mime_for(&rel))
+            .header("X-Content-Type-Options", "nosniff")
+            .body(bytes)
+            .unwrap(),
+        Err(_) => Response::builder()
+            .status(StatusCode::NOT_FOUND)
+            .body(Vec::new())
+            .unwrap(),
+    }
 }
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     let app = tauri::Builder::default()
         .plugin(tauri_plugin_dialog::init())
-        .manage(AppState::default())
+        .plugin(tauri_plugin_opener::init())
+        .setup(|app| {
+            let dir = app.path().app_config_dir()?;
+            app.manage(AppState::new(settings::path(dir)));
+            Ok(())
+        })
+        .register_uri_scheme_protocol("amberfile", |ctx, req| {
+            serve_vault_file(ctx.app_handle(), req.uri().path())
+        })
         .invoke_handler(tauri::generate_handler![
-            pick_vault,
-            startup_vault,
-            open_vault,
-            list_notes,
-            read_note,
-            write_note,
-            engine_start,
-            engine_send,
+            commands::app_info,
+            commands::pick_folder,
+            commands::open_vault,
+            commands::init_vault,
+            commands::create_vault,
+            commands::clone_vault,
+            commands::forget_vault,
+            commands::list_chests,
+            commands::create_chest,
+            commands::make_chest,
+            commands::update_chest,
+            commands::open_chest,
+            commands::tree,
+            commands::note_list,
+            commands::open_note,
+            commands::write_note,
+            commands::create_note,
+            commands::create_folder,
+            commands::rename_path,
+            commands::trash_path,
+            commands::resolve_link,
+            commands::backlinks,
+            commands::outgoing_links,
+            commands::search,
+            commands::render_markdown,
+            commands::templates,
+            commands::export_pdf,
+            commands::reveal_path,
+            commands::reveal_vault_path,
+            commands::open_external,
+            commands::engine_start,
+            commands::engine_send,
         ])
         .build(tauri::generate_context!())
         .expect("error while building Amber");

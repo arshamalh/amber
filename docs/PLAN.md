@@ -158,6 +158,8 @@ flowchart TB
   P3 -->|"Gate: stable public release on all three desktop systems"| P4
 ```
 
+**Progress:** Phase 0 done (v0.0.1). Phase 1 built and in daily-use testing; see ADRs 0004 and 0005 for its decisions.
+
 The phases have no dates on purpose. Pass each gate before starting the next phase. Phase 1 is the one that matters most: if you don't use Amber daily for real notes, nothing after it is worth building yet.
 
 **Parked for later.** These are not in any phase yet. Each needs its own decision before it gets one:

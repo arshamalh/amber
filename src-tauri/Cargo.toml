@@ -17,11 +17,18 @@ tauri-build = { version = "2.7", features = [] }
 [dependencies]
 tauri = { version = "2.12", features = [] }
 tauri-plugin-dialog = "2.8"
+tauri-plugin-opener = "2.7"
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
 thiserror = "2"
 dunce = "1"
 tokio = { version = "1", features = ["process", "io-util", "sync", "macros", "rt"] }
+toml = "1"
+toml_edit = "0.25"
+tantivy = "0.27"
+notify-debouncer-full = "0.7"
+comrak = { version = "0.59", default-features = false }
+trash = "5"
 
 [dev-dependencies]
 tempfile = "3"

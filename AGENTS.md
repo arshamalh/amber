@@ -6,17 +6,32 @@ The full plan, decisions and roadmap are in `docs/PLAN.md`. Read it before non-t
 
 ## Status
 
-Current phase: **Phase 0 · Spike**. The skeleton exists: Tauri 2 + Rust core, Tinymist sidecar over LSP, CodeMirror with completion and diagnostics, live preview, ADRs, CI. Gate to Phase 1: edit a `.typ` note with completion and live preview.
+Current phase: **Phase 1 · MVP**. Built: vaults (create with optional git, clone, open, init), chests with `chest.toml`, a chest-scoped file tree, Markdown notes with a preview, `[[links]]` with completion and backlinks, chest-scoped search, templates, PDF export of Typst notes, a command palette. Gate to Phase 2: the owner uses Amber daily for one real chest.
+
+Known gaps: renaming does not update links; Markdown has no PDF export; links in the Typst preview are not clickable.
 
 ## Layout
 
-- `src-tauri/src/vault.rs`: all file access, confined to the vault root.
-- `src-tauri/src/typst/`: the Typst engine adapter (spawns `tinymist lsp`, LSP framing). The only code that knows about Tinymist.
-- `src-tauri/src/lib.rs`: Tauri commands. The UI calls these and nothing else.
-- `src/lib/engine.ts`: LSP transport over Tauri IPC, `@codemirror/lsp-client`, preview start/stop.
-- `src/App.svelte`, `src/lib/Editor.svelte`: the UI.
-- `src-tauri/tinymist.version`: the pinned Tinymist release. `npm run fetch-tinymist` installs it.
-- `docs/adr/`: decisions.
+Rust core (`src-tauri/src/`):
+
+- `vault.rs`: all file access, confined to the vault root. Vault/chest creation, tree, note and folder operations, templates.
+- `config.rs`: `amber.toml` / `chest.toml`, read with `toml`, written with `toml_edit` (comments survive).
+- `links.rs`: `[[link]]` parsing and chest-scoped resolution.
+- `index.rs`: the open chest's in-memory index (Tantivy in RAM + link graph). ADR 0004.
+- `watcher.rs`: file watcher; external edits update the index and reach the UI as `vault-changed`.
+- `typst/`: the Typst engine adapter (Tinymist LSP, PDF export). The only code that knows about Tinymist.
+- `git.rs`: system `git` for init and clone. `markdown.rs`: comrak rendering. `settings.rs`: per-device app settings (recent vaults), outside the vault.
+- `commands.rs`: Tauri commands, the UI's only way in. Chest-scoped commands check paths against the open chest.
+
+UI (`src/`):
+
+- `lib/app.svelte.ts`: app state and flows (open vault/chest/note, autosave, external changes, links).
+- `lib/ui.svelte.ts`: dialogs, palette, panels. `lib/actions.ts`: shared actions and the command list.
+- `lib/engine.ts`: LSP transport over Tauri IPC, `@codemirror/lsp-client`, preview start/stop.
+- `lib/wiki.ts`: `[[link]]` highlighting, Cmd/Ctrl+click, completion in CodeMirror.
+- `lib/components/`: Welcome, FileTree, SearchPanel, LinksPanel, MarkdownPreview, CommandPalette, Dialogs.
+
+Other: `src-tauri/tinymist.version` (pinned Tinymist; `npm run fetch-tinymist` installs it), `docs/adr/` (decisions).
 
 ## Commands
 

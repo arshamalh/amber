@@ -31,6 +31,40 @@ pub fn binary_path() -> PathBuf {
         .unwrap_or_else(|| PathBuf::from(name))
 }
 
+/// Compiles `input` to a PDF at `output` with the bundled Tinymist.
+/// `root` is the Typst project root (the vault), so `/_shared/...` imports
+/// resolve the same way as in the preview.
+pub async fn export_pdf(root: &Path, input: &Path, output: &Path) -> Result<(), String> {
+    let mut cmd = Command::new(binary_path());
+    cmd.arg("compile")
+        .arg("--root")
+        .arg(root)
+        .arg(input)
+        .arg(output)
+        .current_dir(root)
+        .stdin(Stdio::null())
+        .kill_on_drop(true);
+    #[cfg(windows)]
+    cmd.creation_flags(0x0800_0000); // CREATE_NO_WINDOW
+    let out = cmd
+        .output()
+        .await
+        .map_err(|e| format!("could not run Tinymist: {e}"))?;
+    if out.status.success() {
+        Ok(())
+    } else {
+        let mut msg = String::from_utf8_lossy(&out.stderr).trim().to_owned();
+        if msg.is_empty() {
+            msg = String::from_utf8_lossy(&out.stdout).trim().to_owned();
+        }
+        Err(if msg.is_empty() {
+            "PDF export failed".into()
+        } else {
+            msg
+        })
+    }
+}
+
 /// A running `tinymist lsp` process.
 pub struct Engine {
     stdin: ChildStdin,
