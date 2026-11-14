@@ -1,5 +1,7 @@
 name: CI
 
+# Checks only. Installers are built by release.yml when a v* tag is pushed.
+
 on:
   push:
     branches: [main]
@@ -11,7 +13,7 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
-  build:
+  check:
     name: ${{ matrix.name }}
     strategy:
       fail-fast: false
@@ -67,18 +69,3 @@ jobs:
       - name: Rust tests
         working-directory: src-tauri
         run: cargo test
-
-      - name: Build app bundles
-        run: npm run tauri build
-
-      - uses: actions/upload-artifact@v4
-        with:
-          name: amber-${{ runner.os }}
-          path: |
-            src-tauri/target/release/bundle/**/*.dmg
-            src-tauri/target/release/bundle/**/*.deb
-            src-tauri/target/release/bundle/**/*.AppImage
-            src-tauri/target/release/bundle/**/*.msi
-            src-tauri/target/release/bundle/**/*.exe
-          if-no-files-found: warn
-          retention-days: 14
