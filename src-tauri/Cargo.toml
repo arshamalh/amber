@@ -1,6 +1,6 @@
 [package]
 name = "amber"
-version = "0.0.2"
+version = "0.0.3"
 description = "Local-first notes on Typst"
 authors = ["Arsham Arya"]
 license = "AGPL-3.0-only"
