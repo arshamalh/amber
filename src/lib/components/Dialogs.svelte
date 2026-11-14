@@ -48,11 +48,13 @@
   });
 
   async function run(task: () => Promise<void>) {
+    const opened = ui.dialog;
     working = true;
     error = null;
     try {
       await task();
-      ui.close();
+      // The task may have opened a follow-up dialog; leave that one open.
+      if (ui.dialog === opened) ui.close();
     } catch (e) {
       error = e instanceof Error ? e.message : String(e);
     } finally {
@@ -98,11 +100,69 @@
         <p>{d.text}</p>
         {#if error}<p class="error">{error}</p>{/if}
         <div class="actions">
-          <button type="button" onclick={() => ui.close()}>Cancel</button>
+          <button type="button" onclick={() => ui.close()}>{d.cancel ?? "Cancel"}</button>
           <!-- svelte-ignore a11y_autofocus -->
           <button class="primary" class:danger={d.danger} disabled={working} autofocus>{d.submit}</button>
         </div>
       </form>
+    </Modal>
+  {:else if d.kind === "settings"}
+    <Modal title="Settings" onclose={() => ui.close()} width="520px">
+      <div class="settings">
+        {#if app.vault}
+          <section>
+            <h3>Vault</h3>
+            <p class="value">{app.vault.name}</p>
+            <p class="path">{app.vault.root}</p>
+            <div class="buttons">
+              <button onclick={() => void api.revealPath(app.vault!.root).catch(app.fail)}>Show in file manager</button>
+              <button onclick={() => { ui.close(); void app.switchVault(); }}>Switch vault…</button>
+            </div>
+          </section>
+        {/if}
+        {#if app.chest}
+          <section>
+            <h3>Chest</h3>
+            <p class="value">{app.chest.name}</p>
+            <p class="path">{app.chest.folder}/chest.toml</p>
+            <div class="buttons">
+              <button onclick={() => ui.open({ kind: "chest-settings" })}>Chest settings…</button>
+              <button onclick={() => { ui.close(); ui.palette = "chests"; }}>Switch chest…</button>
+            </div>
+          </section>
+        {/if}
+        <section>
+          <h3>App</h3>
+          <label class="check">
+            <input
+              type="checkbox"
+              checked={app.info?.reopenLastVault ?? true}
+              onchange={(e) => void app.setReopenLastVault(e.currentTarget.checked).catch(app.fail)}
+            />
+            Reopen the last vault when Amber starts
+          </label>
+          <p class="hint">
+            Typst engine: Tinymist {app.info?.tinymistVersion} · {app.engineStatus}
+            {#if app.vault?.initialized}
+              · <button class="link" onclick={() => app.startEngine()}>Restart</button>
+            {/if}
+          </p>
+          <p class="hint">Git: {app.info?.gitAvailable ? "found" : "not found (create and clone with git are off)"}</p>
+        </section>
+        <section>
+          <h3>Keyboard</h3>
+          <dl class="keys">
+            <dt>⌘/Ctrl P</dt><dd>Go to note</dd>
+            <dt>⌘/Ctrl ⇧ P</dt><dd>All commands</dd>
+            <dt>⌘/Ctrl ⇧ F</dt><dd>Search this chest</dd>
+            <dt>⌘/Ctrl ⇧ O</dt><dd>Switch chest</dd>
+            <dt>⌘/Ctrl N</dt><dd>New note</dd>
+            <dt>⌘/Ctrl E</dt><dd>Export PDF</dd>
+            <dt>⌘/Ctrl ,</dt><dd>Settings</dd>
+            <dt>⌘/Ctrl click</dt><dd>Follow a [[link]]</dd>
+          </dl>
+        </section>
+      </div>
     </Modal>
   {:else if d.kind === "new-note" && app.chest}
     <Modal title="New note" onclose={() => ui.close()}>
@@ -284,6 +344,56 @@
     font-family: var(--mono);
     font-size: 12px;
     white-space: nowrap;
+  }
+  .settings {
+    display: grid;
+    gap: 18px;
+  }
+  .settings h3 {
+    margin: 0 0 6px;
+    font-size: 12px;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+    color: var(--muted);
+  }
+  .settings p {
+    margin: 0 0 4px;
+  }
+  .value {
+    font-weight: 600;
+  }
+  .path {
+    font-family: var(--mono);
+    font-size: 12px;
+    color: var(--muted);
+    overflow-wrap: anywhere;
+  }
+  .buttons {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+    margin-top: 8px;
+  }
+  .link {
+    border: none;
+    background: none;
+    padding: 0;
+    color: var(--accent);
+    text-decoration: underline;
+  }
+  .keys {
+    display: grid;
+    grid-template-columns: max-content 1fr;
+    gap: 4px 14px;
+    margin: 0;
+    font-size: 13px;
+  }
+  .keys dt {
+    font-family: var(--mono);
+    color: var(--muted);
+  }
+  .keys dd {
+    margin: 0;
   }
   button.danger {
     background: var(--bad);

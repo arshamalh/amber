@@ -11,7 +11,16 @@ export type Dialog =
       selectStem?: boolean;
       onsubmit: (value: string) => Promise<void>;
     }
-  | { kind: "confirm"; title: string; text: string; submit: string; danger?: boolean; onsubmit: () => Promise<void> }
+  | {
+      kind: "confirm";
+      title: string;
+      text: string;
+      submit: string;
+      cancel?: string;
+      danger?: boolean;
+      onsubmit: () => Promise<void>;
+    }
+  | { kind: "settings" }
   | { kind: "new-note"; dir: string | null }
   | { kind: "chest-settings" }
   | { kind: "create-vault" }

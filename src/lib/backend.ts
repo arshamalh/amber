@@ -7,6 +7,7 @@ export type NoteFormat = "typst" | "markdown";
 export interface AppInfo {
   gitAvailable: boolean;
   recentVaults: string[];
+  reopenLastVault: boolean;
   startupVault: string | null;
   tinymistVersion: string;
 }
@@ -76,6 +77,21 @@ export interface OutLink {
   resolved: string | null;
 }
 
+export interface RenameResult {
+  /** Every note that moved: [old path, new path]. */
+  moves: [string, string][];
+  /** Links pointing to the old names that could be updated. */
+  links: number;
+  /** Notes containing those links. */
+  notes: number;
+}
+
+export interface ExportResult {
+  path: string;
+  /** Parts the PDF could not include. */
+  warnings: string[];
+}
+
 export interface ChestUpdate {
   name: string;
   defaultFormat: NoteFormat;
@@ -92,6 +108,8 @@ export const createVault = (parent: string, name: string, git: boolean) =>
 export const cloneVault = (url: string, parent: string) =>
   invoke<string>("clone_vault", { url, parent });
 export const forgetVault = (path: string) => invoke<void>("forget_vault", { path });
+export const setReopenLastVault = (enabled: boolean) =>
+  invoke<void>("set_reopen_last_vault", { enabled });
 
 export const listChests = () => invoke<ChestInfo[]>("list_chests");
 export const createChest = (name: string) => invoke<ChestInfo>("create_chest", { name });
@@ -108,7 +126,10 @@ export const writeNote = (path: string, content: string) =>
 export const createNote = (path: string, template?: string | null) =>
   invoke<string>("create_note", { path, template: template ?? null });
 export const createFolder = (path: string) => invoke<void>("create_folder", { path });
-export const renamePath = (from: string, to: string) => invoke<void>("rename_path", { from, to });
+export const renamePath = (from: string, to: string) =>
+  invoke<RenameResult>("rename_path", { from, to });
+export const updateLinks = (moves: [string, string][]) =>
+  invoke<string[]>("update_links", { moves });
 export const trashPath = (path: string) => invoke<void>("trash_path", { path });
 
 export const resolveLink = (target: string, from: string) =>
@@ -119,7 +140,7 @@ export const search = (query: string) => invoke<SearchHit[]>("search", { query }
 export const renderMarkdown = (text: string) => invoke<string>("render_markdown", { text });
 export const templates = () => invoke<string[]>("templates");
 
-export const exportPdf = (path: string) => invoke<string | null>("export_pdf", { path });
+export const exportPdf = (path: string) => invoke<ExportResult | null>("export_pdf", { path });
 export const revealPath = (path: string) => invoke<void>("reveal_path", { path });
 export const revealVaultPath = (path: string) => invoke<void>("reveal_vault_path", { path });
 export const openExternal = (url: string) => invoke<void>("open_external", { url });

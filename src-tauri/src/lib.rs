@@ -3,10 +3,12 @@
 
 mod commands;
 mod config;
+mod export;
 mod git;
 mod index;
 mod links;
 mod markdown;
+mod md2typst;
 mod settings;
 mod typst;
 mod uri;
@@ -121,6 +123,7 @@ pub fn run() {
             commands::create_vault,
             commands::clone_vault,
             commands::forget_vault,
+            commands::set_reopen_last_vault,
             commands::list_chests,
             commands::create_chest,
             commands::make_chest,
@@ -133,6 +136,7 @@ pub fn run() {
             commands::create_note,
             commands::create_folder,
             commands::rename_path,
+            commands::update_links,
             commands::trash_path,
             commands::resolve_link,
             commands::backlinks,

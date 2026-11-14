@@ -5,6 +5,11 @@
 use comrak::{markdown_to_html, Options};
 
 pub fn render(text: &str) -> String {
+    markdown_to_html(text, &options())
+}
+
+/// Parser and renderer options shared by the preview and the PDF export.
+pub fn options() -> Options<'static> {
     let mut opts = Options::default();
     let ext = &mut opts.extension;
     ext.strikethrough = true;
@@ -16,7 +21,7 @@ pub fn render(text: &str) -> String {
     ext.wikilinks_title_after_pipe = true;
     ext.math_dollars = true;
     opts.render.r#unsafe = false;
-    markdown_to_html(text, &opts)
+    opts
 }
 
 #[cfg(test)]

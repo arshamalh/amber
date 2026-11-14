@@ -166,6 +166,24 @@ impl ChestIndex {
             .collect()
     }
 
+    /// Notes whose links would change after `moves` (old → new paths),
+    /// with the number of links in each. Uses the indexed text.
+    pub fn link_updates(&self, moves: &[(String, String)]) -> Vec<(String, usize)> {
+        let map = links::RenameMap::new(&self.chest, moves, &self.paths);
+        self.notes
+            .iter()
+            .filter_map(|(path, rec)| {
+                let format = NoteFormat::from_path(path)?;
+                let n = map.edits(path, &rec.body, format).len();
+                (n > 0).then(|| (path.clone(), n))
+            })
+            .collect()
+    }
+
+    pub fn paths(&self) -> &[String] {
+        &self.paths
+    }
+
     pub fn resolve(&self, target: &str, from: &str) -> Option<String> {
         links::resolve(target, from, &self.chest, &self.paths).map(str::to_owned)
     }
@@ -390,6 +408,22 @@ mod tests {
         assert_eq!(idx.search("quantum", 10).unwrap()[0].title, "Fresh");
         idx.remove("Notes/new.md").unwrap();
         assert!(idx.search("quantum", 10).unwrap().is_empty());
+    }
+
+    #[test]
+    fn link_updates_after_rename() {
+        let (_d, v, _idx) = setup();
+        v.rename("Notes/optics.md", "Notes/lenses.md").unwrap();
+        let idx = ChestIndex::build(&v, "Notes").unwrap();
+        let moves = vec![("Notes/optics.md".to_owned(), "Notes/lenses.md".to_owned())];
+        let updates = idx.link_updates(&moves);
+        assert_eq!(
+            updates,
+            [
+                ("Notes/sub/lab.typ".to_owned(), 1),
+                ("Notes/waves.typ".to_owned(), 1)
+            ]
+        );
     }
 
     #[test]

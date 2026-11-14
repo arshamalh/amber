@@ -41,6 +41,9 @@
     {/if}
 
     <p class="foot">
+      <button class="link" onclick={() => ui.open({ kind: "settings" })}>Settings</button>
+    </p>
+    <p class="foot">
       A vault is a folder of plain <code>.typ</code> and <code>.md</code> files. Each first-level folder with a
       <code>chest.toml</code> is a chest: one per project, opened on its own.
     </p>
@@ -124,6 +127,13 @@
   }
   li:hover .forget {
     visibility: visible;
+  }
+  .link {
+    border: none;
+    background: none;
+    padding: 0;
+    color: var(--accent);
+    text-decoration: underline;
   }
   .foot {
     margin-top: 28px;

@@ -11,7 +11,7 @@ use tauri_plugin_opener::OpenerExt;
 
 use crate::index::{Backlink, ChestIndex, NoteSummary, OutLink, SearchHit};
 use crate::vault::{self, ChestInfo, NoteFormat, TreeEntry, Vault};
-use crate::{git, markdown, typst, uri, watcher, AppState};
+use crate::{export, git, markdown, typst, uri, watcher, AppState};
 
 type CmdResult<T> = Result<T, String>;
 
@@ -33,6 +33,7 @@ async fn blocking<T: Send + 'static>(
 pub struct AppInfo {
     git_available: bool,
     recent_vaults: Vec<String>,
+    reopen_last_vault: bool,
     /// A vault to open on launch: the first CLI argument, else `$AMBER_VAULT`.
     startup_vault: Option<String>,
     tinymist_version: String,
@@ -44,9 +45,14 @@ pub async fn app_info(state: State<'_, AppState>) -> CmdResult<AppInfo> {
         .nth(1)
         .or_else(|| std::env::var("AMBER_VAULT").ok())
         .filter(|p| Path::new(p).is_dir());
+    let (recent_vaults, reopen_last_vault) = {
+        let s = state.settings.lock().unwrap();
+        (s.recent_vaults.clone(), s.reopen_last_vault)
+    };
     Ok(AppInfo {
         git_available: git::available().await,
-        recent_vaults: state.settings.lock().unwrap().recent_vaults.clone(),
+        recent_vaults,
+        reopen_last_vault,
         startup_vault,
         tinymist_version: typst::PINNED_VERSION.trim().to_owned(),
     })
@@ -183,6 +189,11 @@ pub async fn clone_vault(url: String, parent: String) -> CmdResult<String> {
     }
     git::clone(&url, &dest).await?;
     Ok(dest.to_string_lossy().into_owned())
+}
+
+#[tauri::command]
+pub fn set_reopen_last_vault(enabled: bool, state: State<'_, AppState>) {
+    state.with_settings(|s| s.reopen_last_vault = enabled);
 }
 
 #[tauri::command]
@@ -357,14 +368,89 @@ pub async fn create_folder(path: String, state: State<'_, AppState>) -> CmdResul
         .map_err(err)
 }
 
+/// What a rename did, and which links could follow it.
+#[derive(Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct RenameResult {
+    /// Every note that moved: (old path, new path).
+    moves: Vec<(String, String)>,
+    /// Links that point to the old names and could be updated.
+    links: usize,
+    /// Notes containing those links.
+    notes: usize,
+}
+
 #[tauri::command]
-pub async fn rename_path(from: String, to: String, state: State<'_, AppState>) -> CmdResult<()> {
+pub async fn rename_path(
+    from: String,
+    to: String,
+    state: State<'_, AppState>,
+) -> CmdResult<RenameResult> {
     let v = state.scoped(&from).map_err(err)?;
     state.scoped(&to).map_err(err)?;
-    let was_note =
-        NoteFormat::from_path(&from).is_some() && v.absolute(&from).is_ok_and(|p| p.is_file());
+    let src = v.absolute(&from).map_err(err)?;
+    let was_note = NoteFormat::from_path(&from).is_some() && src.is_file();
+    let was_dir = src.is_dir();
     v.rename(&from, &to).map_err(err)?;
-    reindex_after_move(&state, &v, &from, &to, was_note)
+    reindex_after_move(&state, &v, &from, &to, was_note)?;
+
+    let moves: Vec<(String, String)> = if was_note && NoteFormat::from_path(&to).is_some() {
+        vec![(from, to)]
+    } else if was_dir {
+        let chest = state.chest().map_err(err)?;
+        let prefix = format!("{to}/");
+        v.notes_in(&chest)
+            .map_err(err)?
+            .into_iter()
+            .filter_map(|p| {
+                let rest = p.strip_prefix(&prefix)?.to_owned();
+                Some((format!("{from}/{rest}"), p))
+            })
+            .collect()
+    } else {
+        Vec::new()
+    };
+    let updates = with_index(&state, |i| i.link_updates(&moves))?;
+    Ok(RenameResult {
+        links: updates.iter().map(|(_, n)| n).sum(),
+        notes: updates.len(),
+        moves,
+    })
+}
+
+/// Rewrites `[[links]]` that pointed to renamed notes. Reads each note from
+/// disk so edits made since the rename are kept. Returns the changed notes.
+#[tauri::command]
+pub async fn update_links(
+    moves: Vec<(String, String)>,
+    state: State<'_, AppState>,
+) -> CmdResult<Vec<String>> {
+    let v = state.vault().map_err(err)?;
+    let chest = state.chest().map_err(err)?;
+    for (old, new) in &moves {
+        vault::ensure_in_chest(old, &chest).map_err(err)?;
+        vault::ensure_in_chest(new, &chest).map_err(err)?;
+    }
+    let paths = with_index(&state, |i| i.paths().to_vec())?;
+    let map = crate::links::RenameMap::new(&chest, &moves, &paths);
+    let mut changed = Vec::new();
+    for path in &paths {
+        let Some(format) = NoteFormat::from_path(path) else {
+            continue;
+        };
+        let Ok(text) = v.read_note(path) else {
+            continue;
+        };
+        let edits = map.edits(path, &text, format);
+        if edits.is_empty() {
+            continue;
+        }
+        let updated = crate::links::apply(&text, &edits);
+        v.write_note(path, &updated).map_err(err)?;
+        with_index(&state, |i| i.upsert(path, &updated))?.map_err(err)?;
+        changed.push(path.clone());
+    }
+    Ok(changed)
 }
 
 #[tauri::command]
@@ -439,15 +525,20 @@ pub async fn templates(state: State<'_, AppState>) -> CmdResult<Vec<String>> {
 
 // ---- export -------------------------------------------------------------------
 
-/// Asks where to save, then compiles a Typst note to PDF. Returns the saved
-/// path, or `None` if the user cancelled.
+#[derive(Serialize)]
+pub struct ExportResult {
+    path: String,
+    /// Parts the PDF could not include (missing images, raw HTML, …).
+    warnings: Vec<String>,
+}
+
+/// Asks where to save, then exports a note to PDF: Typst notes compile
+/// directly, Markdown notes go through a Typst conversion (ADR 0006).
+/// Returns `None` if the user cancelled.
 #[tauri::command]
-pub async fn export_pdf(app: AppHandle, path: String) -> CmdResult<Option<String>> {
+pub async fn export_pdf(app: AppHandle, path: String) -> CmdResult<Option<ExportResult>> {
     let state = app.state::<AppState>();
     let v = state.scoped(&path).map_err(err)?;
-    if NoteFormat::from_path(&path) != Some(NoteFormat::Typst) {
-        return Err("PDF export works for Typst notes; Markdown export comes later".into());
-    }
     let input = v.absolute(&path).map_err(err)?;
     let stem = input
         .file_stem()
@@ -468,8 +559,12 @@ pub async fn export_pdf(app: AppHandle, path: String) -> CmdResult<Option<String
     let Some(output) = rx.await.map_err(err)?.and_then(|p| p.into_path().ok()) else {
         return Ok(None);
     };
-    typst::export_pdf(v.root(), &input, &output).await?;
-    Ok(Some(output.to_string_lossy().into_owned()))
+    let cache = app.path().app_cache_dir().map_err(err)?;
+    let done = export::export_pdf(&v, &path, &output, &cache).await?;
+    Ok(Some(ExportResult {
+        path: output.to_string_lossy().into_owned(),
+        warnings: done.warnings,
+    }))
 }
 
 /// Shows a vault file or folder in the system file manager.

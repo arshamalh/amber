@@ -8,7 +8,9 @@ The full plan, decisions and roadmap are in `docs/PLAN.md`. Read it before non-t
 
 Current phase: **Phase 1 · MVP**. Built: vaults (create with optional git, clone, open, init), chests with `chest.toml`, a chest-scoped file tree, Markdown notes with a preview, `[[links]]` with completion and backlinks, chest-scoped search, templates, PDF export of Typst notes, a command palette. Gate to Phase 2: the owner uses Amber daily for one real chest.
 
-Known gaps: renaming does not update links; Markdown has no PDF export; links in the Typst preview are not clickable.
+Also built: PDF export for Markdown notes through a Typst conversion, and "Update links?" after renames (ADR 0006); a vault menu and Settings (⌘,).
+
+Known gaps: renames outside Amber are not detected (note ids are the planned fix); no Typst → Markdown export or format switch yet; links in the Typst preview are not clickable. Next direction: live-preview editing with a "Show Typst" switch.
 
 ## Layout
 
@@ -19,7 +21,8 @@ Rust core (`src-tauri/src/`):
 - `links.rs`: `[[link]]` parsing and chest-scoped resolution.
 - `index.rs`: the open chest's in-memory index (Tantivy in RAM + link graph). ADR 0004.
 - `watcher.rs`: file watcher; external edits update the index and reach the UI as `vault-changed`.
-- `typst/`: the Typst engine adapter (Tinymist LSP, PDF export). The only code that knows about Tinymist.
+- `typst/`: the Typst engine adapter (Tinymist LSP, PDF compile). The only code that runs Tinymist.
+- `export.rs`, `md2typst.rs`: PDF export; Markdown notes are converted to Typst in a temp folder in the app cache, never the vault.
 - `git.rs`: system `git` for init and clone. `markdown.rs`: comrak rendering. `settings.rs`: per-device app settings (recent vaults), outside the vault.
 - `commands.rs`: Tauri commands, the UI's only way in. Chest-scoped commands check paths against the open chest.
 

@@ -10,12 +10,24 @@ use serde::{Deserialize, Serialize};
 
 const MAX_RECENT: usize = 10;
 
-#[derive(Debug, Clone, Default, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(default, rename_all = "camelCase")]
 pub struct Settings {
     pub recent_vaults: Vec<String>,
     /// Vault root → last open chest folder.
     pub last_chest: BTreeMap<String, String>,
+    /// Open the most recent vault on launch instead of the start screen.
+    pub reopen_last_vault: bool,
+}
+
+impl Default for Settings {
+    fn default() -> Self {
+        Self {
+            recent_vaults: Vec::new(),
+            last_chest: BTreeMap::new(),
+            reopen_last_vault: true,
+        }
+    }
 }
 
 impl Settings {
@@ -75,6 +87,7 @@ mod tests {
         s.last_chest.insert("/a".into(), "Notes".into());
         s.save(&p).unwrap();
         assert_eq!(Settings::load(&p).last_chest["/a"], "Notes");
+        assert!(Settings::load(&p).reopen_last_vault, "defaults on");
         fs::write(&p, "{not json").unwrap();
         assert!(Settings::load(&p).recent_vaults.is_empty());
     }

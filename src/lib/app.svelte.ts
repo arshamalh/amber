@@ -38,6 +38,8 @@ const local = {
 
 class AppStore {
   info = $state<AppInfo | null>(null);
+  /** True until the first vault decision is made (avoids a flash of the start screen). */
+  booting = $state(true);
   vault = $state<VaultView | null>(null);
   chest = $state<ChestInfo | null>(null);
   tree = $state<TreeEntry[]>([]);
@@ -82,10 +84,25 @@ class AppStore {
   // ---- startup and vaults --------------------------------------------
 
   async boot() {
-    await listen<{ paths: string[] }>("vault-changed", (e) => this.onVaultChanged(e.payload.paths));
-    this.info = await api.appInfo();
-    const first = this.info.startupVault ?? this.info.recentVaults[0];
-    if (first) await this.openVault(first, { quiet: !this.info.startupVault });
+    try {
+      await listen<{ paths: string[] }>("vault-changed", (e) => this.onVaultChanged(e.payload.paths));
+      this.info = await api.appInfo();
+      const recent = this.info.reopenLastVault ? this.info.recentVaults[0] : undefined;
+      const first = this.info.startupVault ?? recent;
+      if (first) await this.openVault(first, { quiet: !this.info.startupVault });
+    } finally {
+      this.booting = false;
+    }
+  }
+
+  async setReopenLastVault(enabled: boolean) {
+    await api.setReopenLastVault(enabled);
+    if (this.info) this.info.reopenLastVault = enabled;
+  }
+
+  /** Back to the start screen (recent vaults, create, open, clone). */
+  async switchVault() {
+    await this.closeVault();
   }
 
   async openVault(path: string, opts: { quiet?: boolean } = {}) {
@@ -297,14 +314,25 @@ class AppStore {
     this.selectedDir = path;
   }
 
-  async rename(from: string, to: string) {
+  /** Renames; returns what could follow (links to update) for the caller to offer. */
+  async rename(from: string, to: string): Promise<api.RenameResult> {
     await this.flushSave();
-    await api.renamePath(from, to);
+    const result = await api.renamePath(from, to);
     const open = this.note?.path;
     await this.refreshChest();
     if (open && (open === from || open.startsWith(`${from}/`))) {
       await this.openNote(to + open.slice(from.length));
     }
+    return result;
+  }
+
+  async updateLinks(moves: [string, string][]) {
+    await this.flushSave();
+    const changed = await api.updateLinks(moves);
+    await this.refreshChest();
+    const open = this.note?.path;
+    if (open && changed.includes(open)) await this.openNote(open);
+    this.toast(`Updated links in ${changed.length} note${changed.length === 1 ? "" : "s"}`);
   }
 
   async trash(path: string) {
@@ -337,16 +365,18 @@ class AppStore {
   async exportPdf() {
     const note = this.note;
     if (!note) return;
-    if (note.format !== "typst") return this.toast("PDF export works for Typst notes for now.");
     await this.flushSave();
     this.busy = "Exporting PDF…";
     try {
       const out = await api.exportPdf(note.path);
       if (out) {
-        this.toast(`Exported ${api.baseName(out)}`, "info", {
+        this.toast(`Exported ${api.baseName(out.path)}`, "info", {
           label: "Show",
-          run: () => void api.revealPath(out).catch(this.fail),
+          run: () => void api.revealPath(out.path).catch(this.fail),
         });
+        if (out.warnings.length) {
+          this.toast(`The PDF is missing some parts:\n• ${out.warnings.join("\n• ")}`, "error");
+        }
       }
     } catch (e) {
       this.fail(e);

@@ -40,6 +40,7 @@
     if (key === "n" && !e.shiftKey) return hit(() => actions.newNote());
     if (key === "e" && !e.shiftKey) return hit(() => void app.exportPdf());
     if (key === "\\") return hit(() => (ui.sidebarOpen = !ui.sidebarOpen));
+    if (key === ",") return hit(() => ui.open({ kind: "settings" }));
   }
 
   const wiki = $derived(
@@ -55,14 +56,24 @@
       : [],
   );
 
+  let vaultMenu = $state(false);
+  const otherRecents = $derived((app.info?.recentVaults ?? []).filter((p) => p !== app.vault?.root).slice(0, 6));
+
+  function menu(fn: () => void) {
+    vaultMenu = false;
+    fn();
+  }
+
   const noteTitle = $derived(app.note ? app.notes.find((n) => n.path === app.note!.path)?.title : null);
   const otherFolders = $derived(app.vault?.chests.filter((c) => !c.isChest) ?? []);
 </script>
 
-<svelte:window {onkeydown} />
+<svelte:window {onkeydown} onclick={() => (vaultMenu = false)} />
 
 <div class="app">
-  {#if !app.vault}
+  {#if app.booting}
+    <main class="center"><p class="hint">Opening…</p></main>
+  {:else if !app.vault}
     <Welcome />
   {:else if !app.vault.initialized}
     <main class="center">
@@ -80,9 +91,39 @@
     </main>
   {:else}
     <header>
-      <button class="chest-btn" onclick={() => (ui.palette = "chests")} title="Switch chest (⌘⇧O)">
-        <span class="vault-name">{app.vault.name}</span>
-        <span class="sep">/</span>
+      <div class="vault-wrap">
+        <button
+          class="crumb"
+          onclick={(e) => { e.stopPropagation(); vaultMenu = !vaultMenu; }}
+          title="Vault: switch, create, open"
+          aria-haspopup="menu"
+          aria-expanded={vaultMenu}
+        >
+          <span class="vault-name">{app.vault.name}</span>
+          <span class="caret">▾</span>
+        </button>
+        {#if vaultMenu}
+          <div class="menu" role="menu">
+            {#if otherRecents.length}
+              <p class="menu-label">Recent vaults</p>
+              {#each otherRecents as path (path)}
+                <button role="menuitem" onclick={() => menu(() => void app.openVault(path))} title={path}>
+                  {api.baseName(path.replaceAll("\\", "/"))}
+                </button>
+              {/each}
+              <hr />
+            {/if}
+            <button role="menuitem" onclick={() => menu(actions.openVault)}>Open a folder…</button>
+            <button role="menuitem" onclick={() => menu(() => ui.open({ kind: "create-vault" }))}>Create a vault…</button>
+            <button role="menuitem" disabled={!app.info?.gitAvailable} onclick={() => menu(() => ui.open({ kind: "clone-vault" }))}>Clone with git…</button>
+            <hr />
+            <button role="menuitem" onclick={() => menu(() => void api.revealPath(app.vault!.root).catch(app.fail))}>Show vault in file manager</button>
+            <button role="menuitem" onclick={() => menu(() => void app.switchVault())}>Close vault</button>
+          </div>
+        {/if}
+      </div>
+      <span class="sep">/</span>
+      <button class="crumb" onclick={() => (ui.palette = "chests")} title="Switch chest (⌘⇧O)">
         <strong>{app.chest?.name ?? "No chest"}</strong>
         <span class="caret">▾</span>
       </button>
@@ -93,10 +134,11 @@
         <button class="ghost" onclick={() => (ui.palette = "notes")} title="Go to note (⌘P)">Go to…</button>
         <button class="ghost" onclick={() => ui.showSearch()} title="Search (⌘⇧F)">Search</button>
       {/if}
-      {#if app.note?.format === "typst"}
+      {#if app.note}
         <button class="ghost" onclick={() => app.exportPdf()} title="Export PDF (⌘E)">PDF</button>
       {/if}
       <button class="ghost" onclick={() => (ui.palette = "commands")} title="All commands (⌘⇧P)">⋯</button>
+      <button class="ghost gear" onclick={() => ui.open({ kind: "settings" })} title="Settings (⌘,)" aria-label="Settings">⚙</button>
       <span class="engine {app.engineStatus}" title="Typst engine (Tinymist {app.info?.tinymistVersion}): {app.engineStatus}">●</span>
       {#if app.engineStatus === "failed"}
         <button class="ghost" onclick={() => app.startEngine()}>Restart engine</button>
@@ -234,7 +276,7 @@
     border-bottom: 1px solid var(--line);
     min-width: 0;
   }
-  .chest-btn {
+  .crumb {
     display: flex;
     align-items: baseline;
     gap: 6px;
@@ -243,8 +285,56 @@
     padding: 4px 8px;
     white-space: nowrap;
   }
-  .chest-btn:hover {
+  .crumb:hover {
     background: var(--hover);
+  }
+  .vault-wrap {
+    position: relative;
+  }
+  .menu {
+    position: absolute;
+    top: calc(100% + 4px);
+    left: 0;
+    z-index: 40;
+    min-width: 220px;
+    padding: 4px;
+    background: var(--bg);
+    border: 1px solid var(--line);
+    border-radius: 8px;
+    box-shadow: 0 8px 24px rgb(0 0 0 / 0.18);
+  }
+  .menu button {
+    display: block;
+    width: 100%;
+    text-align: left;
+    border: none;
+    background: none;
+    padding: 6px 10px;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+  .menu button:hover:not(:disabled) {
+    background: var(--hover);
+  }
+  .menu button:disabled {
+    color: var(--muted);
+    cursor: default;
+  }
+  .menu-label {
+    margin: 4px 10px;
+    font-size: 11px;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+    color: var(--muted);
+  }
+  .menu hr {
+    border: none;
+    border-top: 1px solid var(--line);
+    margin: 4px 0;
+  }
+  .gear {
+    font-size: 15px;
   }
   .vault-name,
   .sep,
