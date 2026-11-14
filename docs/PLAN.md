@@ -170,9 +170,9 @@ The phases have no dates on purpose. Pass each gate before starting the next pha
 
 ## Decisions
 
-Only the UI framework is still open; the plan already assumes Svelte 5.
+All decisions below are made.
 
-- [ ] **UI framework:** Svelte 5 (recommended: stable, larger ecosystem) or SolidJS (2.0 still a release candidate)? See the comparison under Technology.
+- [x] **UI framework:** Svelte 5 (stable, larger ecosystem) over SolidJS (2.0 still a release candidate). See the comparison under Technology and ADR 0002.
 - [x] **Editing model:** source editor + live preview + block toolbars (realistic for v1).
 - [x] **Link syntax in Typst notes:** `[[Note]]` text styled by an Amber Typst package through a show rule (same as Obsidian, looks fine in PDF).
 - [x] **Chest isolation:** strict for now; cross-chest can become an option in the future.

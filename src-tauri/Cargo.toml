@@ -1,0 +1,28 @@
+[package]
+name = "amber"
+version = "0.0.1"
+description = "Local-first notes on Typst"
+authors = ["Arsham Arya"]
+license = "AGPL-3.0-only"
+edition = "2021"
+rust-version = "1.85"
+
+[lib]
+name = "amber_lib"
+crate-type = ["staticlib", "cdylib", "rlib"]
+
+[build-dependencies]
+tauri-build = { version = "2.7", features = [] }
+
+[dependencies]
+tauri = { version = "2.12", features = [] }
+tauri-plugin-dialog = "2.8"
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+thiserror = "2"
+dunce = "1"
+tokio = { version = "1", features = ["process", "io-util", "sync", "macros", "rt"] }
+
+[dev-dependencies]
+tempfile = "3"
+tokio = { version = "1", features = ["process", "io-util", "sync", "macros", "rt", "rt-multi-thread"] }

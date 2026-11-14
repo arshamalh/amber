@@ -6,14 +6,30 @@ The full plan, decisions and roadmap are in `docs/PLAN.md`. Read it before non-t
 
 ## Status
 
-Pre-code. Current phase: **Phase 0 · Spike** (Tauri 2 + Rust skeleton, Tinymist sidecar, CodeMirror with LSP, live preview, CI for Linux, macOS and Windows).
+Current phase: **Phase 0 · Spike**. The skeleton exists: Tauri 2 + Rust core, Tinymist sidecar over LSP, CodeMirror with completion and diagnostics, live preview, ADRs, CI. Gate to Phase 1: edit a `.typ` note with completion and live preview.
+
+## Layout
+
+- `src-tauri/src/vault.rs`: all file access, confined to the vault root.
+- `src-tauri/src/typst/`: the Typst engine adapter (spawns `tinymist lsp`, LSP framing). The only code that knows about Tinymist.
+- `src-tauri/src/lib.rs`: Tauri commands. The UI calls these and nothing else.
+- `src/lib/engine.ts`: LSP transport over Tauri IPC, `@codemirror/lsp-client`, preview start/stop.
+- `src/App.svelte`, `src/lib/Editor.svelte`: the UI.
+- `src-tauri/tinymist.version`: the pinned Tinymist release. `npm run fetch-tinymist` installs it.
+- `docs/adr/`: decisions.
+
+## Commands
+
+- `npm install && npm run fetch-tinymist` once, then `npm run tauri dev`.
+- `AMBER_VAULT=/path/to/vault npm run tauri dev` opens a vault on launch (a built binary also takes the path as its first argument).
+- Checks: `npm run check`, and in `src-tauri/`: `cargo fmt --check`, `cargo clippy --all-targets -- -D warnings`, `cargo test`.
 
 ## Stack (decided)
 
 - Desktop shell: Tauri 2. Core logic in Rust; the UI never touches files directly.
-- UI: TypeScript + Svelte 5 (runes). Not React.
+- UI: TypeScript + Svelte 5 (runes). Not React. (ADR 0002)
 - Editor: CodeMirror 6, talking to Tinymist over LSP.
-- Typst: Tinymist as a bundled sidecar (`tinymist lsp`, preview). Pin its version and keep it behind one adapter.
+- Typst: Tinymist as a bundled sidecar (`tinymist lsp`, preview). Pin its version and keep it behind one adapter. (ADR 0003)
 - Search/index: Tantivy + SQLite in the app cache dir, never inside the vault.
 - Config: TOML (`amber.toml` per vault, `chest.toml` per chest), edited with `toml_edit` so user comments survive.
 - Mobile is out of scope for the desktop app. Don't add code paths or constraints for it.

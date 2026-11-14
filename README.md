@@ -4,7 +4,7 @@
 
 Amber is an open-source, local-first notes app for people who want real typesetting, not just Markdown. Every note is a plain `.typ` or `.md` file in a folder you choose. Every project lives in its own **chest**, so a large vault stays organized.
 
-> **Status:** early planning, no code yet. See [`docs/PLAN.md`](docs/PLAN.md) for the plan and roadmap. Everything below describes what Amber is being built to do.
+> **Status:** Phase 0 spike. You can open a folder, edit Typst notes with completion and diagnostics, and see a live preview. See [`docs/PLAN.md`](docs/PLAN.md) for the plan and roadmap. Most of what is below describes what Amber is being built to do.
 
 ## Our promise
 
@@ -71,6 +71,18 @@ Desktop first: Linux, macOS and Windows. An iPad app is planned separately later
 5. **Mobile:** a separately designed iPad app.
 
 Parked for later: real-time collaboration, a hosted sync service, AI features, Markdown inside Typst, links between chests.
+
+## Development
+
+You need Rust (stable), Node.js 20+, and the [Tauri 2 system dependencies](https://v2.tauri.app/start/prerequisites/) for your OS.
+
+```sh
+npm install
+npm run fetch-tinymist   # downloads the pinned Tinymist and checks its SHA-256
+npm run tauri dev        # or: AMBER_VAULT=/path/to/folder npm run tauri dev
+```
+
+Checks: `npm run check`, then in `src-tauri/`: `cargo fmt --check`, `cargo clippy --all-targets -- -D warnings`, `cargo test`. Decisions are recorded in [`docs/adr/`](docs/adr/).
 
 ## Contributing
 
