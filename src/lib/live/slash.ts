@@ -8,6 +8,8 @@ import type { NoteFormat } from "../backend";
 
 interface Block {
   label: string;
+  /** Extra words the "/" query matches, e.g. "line hr" for /line or /hr. */
+  aliases?: string;
   detail: string;
   /** Snippet template (`${}` / `${name}` are fields); `\n` breaks lines. */
   typst?: string;
@@ -50,7 +52,15 @@ const BLOCKS: Block[] = [
   { label: "Link to note", detail: "[[Note]]", typst: "[[${}]]", markdown: "[[${}]]", reopen: true },
   { label: "Web link", detail: "https://…", typst: '#link("${https://}")[${text}]', markdown: "[${text}](${https://})" },
   { label: "Footnote", detail: "Note at the page bottom", typst: "#footnote[${}]", markdown: "[^${1}]" },
-  { label: "Divider", detail: "Horizontal line", typst: "#line(length: 100%)", markdown: "---", line: true },
+  {
+    label: "Horizontal line",
+    aliases: "line divider hr rule separator",
+    detail: "A line across the page",
+    typst: "#line(length: 100%)",
+    // `***`, not `---`: under a paragraph `---` would turn it into a heading.
+    markdown: "***",
+    line: true,
+  },
   { label: "Page break", detail: "Start a new page in the PDF", typst: "#pagebreak()", line: true },
   { label: "Table of contents", detail: "Outline of headings", typst: "#outline()", line: true },
 ];
@@ -73,7 +83,10 @@ export function slashMenu(opts: SlashOptions): Extension {
       if (NO_MENU.test(n.name)) return null;
     }
     const options: Completion[] = BLOCKS.filter((blk) => blk.pickFile || blk[opts.format]).map((blk) => ({
-      label: blk.label,
+      // Matching uses `label`; `displayLabel` is what the menu shows.
+      // Aliases first, so "/line" is a prefix match and beats "Inline maths".
+      label: blk.aliases ? `${blk.aliases} ${blk.label}` : blk.label,
+      displayLabel: blk.label,
       detail: blk.detail,
       type: "keyword",
       boost: 0,

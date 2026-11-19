@@ -94,9 +94,68 @@
   const dirFor = (node: Node | null) =>
     !node ? app.chest?.folder ?? null : node.kind === "dir" ? node.path : api.dirName(node.path);
 
+  // Run the action first: `node` in the menu reads `menu.node`, which is
+  // gone once the menu closes.
   function menuAction(fn: () => void) {
+    try {
+      fn();
+    } finally {
+      menu = null;
+    }
+  }
+
+  // ---- drag and drop: move notes, files and folders between folders ----
+
+  let dragging = $state<Node | null>(null);
+  /** Folder under the pointer (the chest folder means "top level"). */
+  let dropTarget = $state<string | null>(null);
+  let expandTimer: ReturnType<typeof setTimeout> | undefined;
+
+  function canDrop(target: string) {
+    const d = dragging;
+    if (!d) return false;
+    if (api.dirName(d.path) === target) return false; // already there
+    if (d.kind === "dir" && (target === d.path || target.startsWith(`${d.path}/`))) return false;
+    return true;
+  }
+
+  function onDragStart(e: DragEvent, node: Node) {
+    dragging = node;
     menu = null;
-    fn();
+    e.dataTransfer?.setData("text/plain", node.path);
+    if (e.dataTransfer) e.dataTransfer.effectAllowed = "move";
+  }
+
+  function onDragOver(e: DragEvent, target: string, expandable = false) {
+    if (!dragging) return;
+    e.stopPropagation();
+    if (!canDrop(target)) {
+      dropTarget = null;
+      return;
+    }
+    e.preventDefault(); // allow dropping here
+    if (e.dataTransfer) e.dataTransfer.dropEffect = "move";
+    if (dropTarget !== target) {
+      dropTarget = target;
+      clearTimeout(expandTimer);
+      // Hovering a closed folder opens it, so deeper folders can be reached.
+      if (expandable && !expanded.has(target)) expandTimer = setTimeout(() => toggle(target), 650);
+    }
+  }
+
+  async function onDrop(e: DragEvent, target: string) {
+    e.preventDefault();
+    e.stopPropagation();
+    const node = dragging;
+    const ok = !!node && canDrop(target); // before endDrag() clears `dragging`
+    endDrag();
+    if (node && ok) await actions.move(node.path, node.kind === "dir", target);
+  }
+
+  function endDrag() {
+    clearTimeout(expandTimer);
+    dragging = null;
+    dropTarget = null;
   }
 </script>
 
@@ -110,9 +169,16 @@
         class:active={app.note?.path === node.path}
         class:selected={node.kind === "dir" && app.selectedDir === node.path}
         style:padding-left="{8 + depth * 14}px"
+        class:drop={node.kind === "dir" && dropTarget === node.path}
+        class:dragging={dragging?.path === node.path}
         title={node.kind === "note" ? titles.get(node.path) ?? node.name : node.name}
+        draggable="true"
         onclick={() => click(node)}
         oncontextmenu={(e) => openMenu(e, node)}
+        ondragstart={(e) => onDragStart(e, node)}
+        ondragend={endDrag}
+        ondragover={(e) => (node.kind === "dir" ? onDragOver(e, node.path, true) : onDragOver(e, api.dirName(node.path)))}
+        ondrop={(e) => onDrop(e, node.kind === "dir" ? node.path : api.dirName(node.path))}
       >
         {#if node.kind === "dir"}
           <span class="chev" class:open={expanded.has(node.path)}>›</span>
@@ -128,7 +194,18 @@
   {/each}
 {/snippet}
 
-<div class="tree" oncontextmenu={(e) => openMenu(e, null)} role="tree" tabindex="-1">
+<div
+  class="tree"
+  class:drop-root={!!app.chest && dropTarget === app.chest.folder}
+  oncontextmenu={(e) => openMenu(e, null)}
+  ondragover={(e) => app.chest && onDragOver(e, app.chest.folder)}
+  ondragleave={(e) => {
+    if (!(e.currentTarget as HTMLElement).contains(e.relatedTarget as globalThis.Node | null)) dropTarget = null;
+  }}
+  ondrop={(e) => app.chest && onDrop(e, app.chest.folder)}
+  role="tree"
+  tabindex="-1"
+>
   <ul>{@render branch(root.children, 0)}</ul>
   {#if !app.tree.length}
     <p class="empty">This chest is empty. <button class="link" onclick={() => actions.newNote()}>Create a note</button></p>
@@ -176,6 +253,17 @@
   }
   .row:hover {
     background: var(--hover);
+  }
+  .row.drop {
+    background: var(--accent-bg);
+    box-shadow: inset 0 0 0 1px var(--accent);
+  }
+  .row.dragging {
+    opacity: 0.5;
+  }
+  .tree.drop-root {
+    box-shadow: inset 0 0 0 1px var(--accent);
+    border-radius: 6px;
   }
   .row.active {
     background: var(--accent-bg);

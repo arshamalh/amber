@@ -38,21 +38,37 @@ export function rename(path: string, isDir: boolean) {
       const to = `${chest}/${v.replace(/^\/+|\/+$/g, "")}`;
       if (to === path) return;
       const result = await app.rename(path, to);
-      if (result.links > 0) offerLinkUpdate(result, api.stem(to));
+      if (result.links > 0) offerLinkUpdate(result, isDir ? null : api.stem(to));
     },
   });
 }
 
+/** Moves a note, file or folder into `targetDir` (drag and drop). */
+export async function move(path: string, isDir: boolean, targetDir: string) {
+  const to = `${targetDir}/${api.baseName(path)}`;
+  try {
+    const result = await app.rename(path, to);
+    const where = targetDir === app.chest?.folder ? "the top level" : api.baseName(targetDir);
+    app.toast(`Moved ${api.baseName(path)}${isDir ? " (folder)" : ""} to ${where}`);
+    if (result.links > 0) offerLinkUpdate(result, isDir ? null : api.stem(to));
+  } catch (e) {
+    app.fail(e);
+  }
+}
+
 /** After a rename: ask whether links to the old name should follow. */
-function offerLinkUpdate(result: api.RenameResult, newName: string) {
-  const links = `${result.links} link${result.links === 1 ? "" : "s"}`;
+function offerLinkUpdate(result: api.RenameResult, newName: string | null) {
+  const one = result.links === 1;
+  const links = `${result.links} link${one ? "" : "s"}`;
   const notes = `${result.notes} note${result.notes === 1 ? "" : "s"}`;
+  // A single renamed note: name it. A folder move: say "new location".
+  const where = newName ? `“${newName}”` : "the new location";
   // Open after the rename dialog has closed.
   queueMicrotask(() =>
     ui.open({
       kind: "confirm",
       title: "Update links?",
-      text: `${links} in ${notes} point to the old name. Update them to point to “${newName}”?`,
+      text: `${links} in ${notes} ${one ? "points" : "point"} to the old ${newName ? "name" : "location"}. Update ${one ? "it" : "them"} to point to ${where}?`,
       submit: "Update links",
       cancel: "Keep old links",
       onsubmit: () => app.updateLinks(result.moves),
