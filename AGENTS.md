@@ -10,7 +10,7 @@ Current phase: **Phase 1 · MVP**. Built: vaults (create with optional git, clon
 
 Also built: PDF export for Markdown notes through a Typst conversion, and "Update links?" after renames (ADR 0006); a vault menu and Settings (⌘,).
 
-Phase 2 started (ADR 0007): the default **writing view** hides markup away from the cursor and shows maths and `#function(...)` blocks rendered by Typst; "Show Typst" (⌘⇧T) shows the plain source; a `/` menu inserts blocks. The Tinymist page preview is an optional "Page" view. Still to do in Phase 2: forms for editing blocks, diagram blocks (fletcher, Mermaid), a visual diagram editor, saved views.
+Phase 2 started (ADR 0007): the default **writing view** hides markup away from the cursor and shows maths and `#function(...)` blocks rendered by Typst; the header's **Writing | Source** switch (⌘⇧T) shows the plain source; a `/` menu inserts blocks. Each chest's `default_format` (chosen at creation, Typst by default, auto-detected for existing folders) sets the format of new notes (ADR 0008). The Tinymist page preview is an optional "Page" view. Still to do in Phase 2: forms for editing blocks, diagram blocks (fletcher, Mermaid), a visual diagram editor, saved views.
 
 Known gaps: renames outside Amber are not detected (note ids are the planned fix); no Typst → Markdown export or format switch yet; links in the Tinymist page view are not clickable.
 

@@ -17,6 +17,7 @@
   let parent = $state("");
   let gitInit = $state(false);
   let url = $state("");
+  let moreOptions = $state(false);
 
   $effect(() => {
     const d = ui.dialog;
@@ -28,6 +29,7 @@
       value = "";
       format = app.chest?.defaultFormat ?? "typst";
       template = "";
+      moreOptions = false;
       void api.templates().then((t) => (templates = t), () => (templates = []));
     }
     if (d.kind === "chest-settings" && app.chest) {
@@ -40,6 +42,10 @@
       value = "";
       parent = "";
       gitInit = false;
+    }
+    if (d.kind === "new-chest") {
+      value = "";
+      format = "typst";
     }
     if (d.kind === "clone-vault") {
       url = "";
@@ -77,6 +83,23 @@
   const relDir = (dir: string | null) =>
     dir && app.chest && dir !== app.chest.folder ? dir.slice(app.chest.folder.length + 1) + "/" : "";
 </script>
+
+{#snippet formatChoice()}
+  <fieldset class="formats">
+    <legend>Notes in this chest are written in</legend>
+    <label class="format" class:on={format === "typst"}>
+      <input type="radio" bind:group={format} value="typst" />
+      <span class="format-name">Typst <span class="tag">Recommended</span></span>
+      <span class="format-hint">Maths, figures, diagrams, beautiful PDFs and books.</span>
+    </label>
+    <label class="format" class:on={format === "markdown"}>
+      <input type="radio" bind:group={format} value="markdown" />
+      <span class="format-name">Markdown</span>
+      <span class="format-hint">Works with Obsidian and other Markdown apps.</span>
+    </label>
+    <p class="hint">You can change this later in chest settings. Notes you already have keep their format.</p>
+  </fieldset>
+{/snippet}
 
 {#if ui.dialog}
   {@const d = ui.dialog}
@@ -179,25 +202,32 @@
             <input bind:value placeholder="Untitled" use:focusSelect={false} />
           </div>
         </label>
-        <div class="row">
-          <label>
-            Format
-            <select bind:value={format}>
-              <option value="typst">Typst (.typ)</option>
-              <option value="markdown">Markdown (.md)</option>
-            </select>
-          </label>
-          <label>
-            Template
-            <select bind:value={template}>
-              <option value="">Chest default</option>
-              {#each templates.filter((t) => t.endsWith(format === "typst" ? ".typ" : ".md")) as t (t)}
-                <option value={t}>{api.stem(t)}</option>
-              {/each}
-            </select>
-          </label>
-        </div>
-        <p class="hint">Use slashes to create it in a subfolder, e.g. <code>lectures/week 1</code>.</p>
+        <p class="hint">
+          A {format === "typst" ? "Typst" : "Markdown"} note, like the rest of this chest. Use slashes for a
+          subfolder, e.g. <code>lectures/week 1</code>.
+        </p>
+        {#if moreOptions}
+          <div class="row">
+            <label>
+              Format
+              <select bind:value={format}>
+                <option value="typst">Typst (.typ)</option>
+                <option value="markdown">Markdown (.md)</option>
+              </select>
+            </label>
+            <label>
+              Template
+              <select bind:value={template}>
+                <option value="">Chest default</option>
+                {#each templates.filter((t) => t.endsWith(format === "typst" ? ".typ" : ".md")) as t (t)}
+                  <option value={t}>{api.stem(t)}</option>
+                {/each}
+              </select>
+            </label>
+          </div>
+        {:else}
+          <button type="button" class="link" onclick={() => (moreOptions = true)}>More options</button>
+        {/if}
         {#if error}<p class="error">{error}</p>{/if}
         <div class="actions">
           <button type="button" onclick={() => ui.close()}>Cancel</button>
@@ -243,6 +273,26 @@
         </div>
       </form>
     </Modal>
+  {:else if d.kind === "new-chest"}
+    <Modal title={d.first ? "Create your first chest" : "New chest"} onclose={() => ui.close()}>
+      <form
+        onsubmit={(e) => {
+          e.preventDefault();
+          void run(() => app.createChest(value.trim(), format));
+        }}
+      >
+        <label>
+          Name (also the folder name)
+          <input bind:value placeholder="Thesis" use:focusSelect={false} />
+        </label>
+        {@render formatChoice()}
+        {#if error}<p class="error">{error}</p>{/if}
+        <div class="actions">
+          <button type="button" onclick={() => ui.close()}>Cancel</button>
+          <button class="primary" disabled={working || !value.trim()}>Create</button>
+        </div>
+      </form>
+    </Modal>
   {:else if d.kind === "create-vault"}
     <Modal title="Create a vault" onclose={() => ui.close()}>
       <form
@@ -251,6 +301,7 @@
           void run(async () => {
             const root = await api.createVault(parent, value.trim(), gitInit);
             await app.openVault(root);
+            ui.open({ kind: "new-chest", first: true });
           });
         }}
       >
@@ -272,7 +323,7 @@
           Track changes with git
           {#if !app.info?.gitAvailable}<span class="hint">(git not found)</span>{/if}
         </label>
-        <p class="hint">Creates the folder with <code>amber.toml</code>, a <code>_shared/</code> folder for templates, and a first chest.</p>
+        <p class="hint">Creates the folder with <code>amber.toml</code> and a <code>_shared/</code> folder for templates. Next, you create its first chest.</p>
         {#if error}<p class="error">{error}</p>{/if}
         <div class="actions">
           <button type="button" onclick={() => ui.close()}>Cancel</button>
@@ -394,6 +445,53 @@
   }
   .keys dd {
     margin: 0;
+  }
+  .formats {
+    border: none;
+    padding: 0;
+    margin: 0;
+    display: grid;
+    gap: 6px;
+  }
+  .formats legend {
+    font-size: 13px;
+    color: var(--muted);
+    padding: 0;
+    margin-bottom: 6px;
+  }
+  .formats .format {
+    display: grid;
+    grid-template-columns: auto 1fr;
+    column-gap: 10px;
+    align-items: center;
+    padding: 8px 10px;
+    border: 1px solid var(--line);
+    border-radius: 8px;
+    color: var(--fg);
+    cursor: pointer;
+  }
+  .formats .format.on {
+    border-color: var(--accent);
+    background: var(--accent-bg);
+  }
+  .formats .format input {
+    grid-row: span 2;
+    accent-color: var(--accent);
+  }
+  .format-name {
+    font-weight: 600;
+  }
+  .format-hint {
+    font-size: 12px;
+    color: var(--muted);
+  }
+  .tag {
+    font-size: 10px;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+    color: var(--accent);
+    margin-left: 6px;
   }
   button.danger {
     background: var(--bad);

@@ -23,6 +23,7 @@ export type Dialog =
   | { kind: "settings" }
   | { kind: "new-note"; dir: string | null }
   | { kind: "chest-settings" }
+  | { kind: "new-chest"; first?: boolean }
   | { kind: "create-vault" }
   | { kind: "clone-vault" };
 

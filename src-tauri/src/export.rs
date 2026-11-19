@@ -148,7 +148,7 @@ mod tests {
         };
         std::env::set_var("AMBER_TINYMIST", bin);
         let dir = tempfile::tempdir().unwrap();
-        let v = Vault::create(dir.path(), "V").unwrap();
+        let v = crate::vault::test_vault(dir.path());
         fs::create_dir_all(v.root().join("Notes/img")).unwrap();
         fs::write(v.root().join("Notes/img/dot.png"), PNG).unwrap();
         v.write_note(
@@ -184,7 +184,7 @@ mod tests {
         let Some(bin) = tinymist() else { return };
         std::env::set_var("AMBER_TINYMIST", bin);
         let dir = tempfile::tempdir().unwrap();
-        let v = Vault::create(dir.path(), "V").unwrap();
+        let v = crate::vault::test_vault(dir.path());
         let text = "Inline $a_1 + \\beta$ and\n\n$$\\sum_{i=1}^n i$$\n";
         let work = dir.path().join("work");
         fs::create_dir_all(&work).unwrap();

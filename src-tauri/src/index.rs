@@ -332,7 +332,7 @@ mod tests {
 
     fn setup() -> (tempfile::TempDir, Vault, ChestIndex) {
         let dir = tempfile::tempdir().unwrap();
-        let v = Vault::create(dir.path(), "V").unwrap();
+        let v = crate::vault::test_vault(dir.path());
         v.write_note(
             "Notes/waves.typ",
             "= Wave Equation\n\nThe speed of light. See [[Optics]].\n",
@@ -345,7 +345,8 @@ mod tests {
         .unwrap();
         v.write_note("Notes/sub/lab.typ", "Lab notes about [[optics|lenses]].\n")
             .unwrap();
-        v.create_chest("Other").unwrap();
+        v.create_chest("Other", crate::vault::NoteFormat::Typst)
+            .unwrap();
         v.write_note("Other/optics.typ", "= Elsewhere\n[[waves]]\n")
             .unwrap();
         let idx = ChestIndex::build(&v, "Notes").unwrap();

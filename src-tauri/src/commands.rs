@@ -209,10 +209,14 @@ pub async fn list_chests(state: State<'_, AppState>) -> CmdResult<Vec<ChestInfo>
 }
 
 #[tauri::command]
-pub async fn create_chest(name: String, state: State<'_, AppState>) -> CmdResult<ChestInfo> {
+pub async fn create_chest(
+    name: String,
+    format: NoteFormat,
+    state: State<'_, AppState>,
+) -> CmdResult<ChestInfo> {
     state
         .vault()
-        .and_then(|v| v.create_chest(name.trim()))
+        .and_then(|v| v.create_chest(name.trim(), format))
         .map_err(err)
 }
 

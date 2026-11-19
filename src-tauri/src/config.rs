@@ -116,16 +116,20 @@ name = {name}
     )
 }
 
-pub fn new_chest_toml(name: &str, template: Option<&str>) -> String {
+pub fn new_chest_toml(name: &str, format: NoteFormat, template: Option<&str>) -> String {
     let template = match template {
         Some(t) => format!("template = {}", toml_edit::Value::from(t)),
-        None => "# template = \"_shared/templates/note.typ\"".to_owned(),
+        None => format!("# template = \"_shared/templates/note.{}\"", format.ext()),
+    };
+    let format = match format {
+        NoteFormat::Typst => "typst",
+        NoteFormat::Markdown => "markdown",
     };
     format!(
         r#"# Amber chest settings. Opening this chest scopes the file tree,
 # search and [[links]] to this folder.
 name = {name}
-default_format = "typst"   # "typst" | "markdown"
+default_format = "{format}"   # format of new notes: "typst" | "markdown"
 {template}
 "#,
         name = toml_edit::Value::from(name)
@@ -198,10 +202,16 @@ title = "QEC"
     fn generated_files_parse() {
         let v: VaultConfig = toml::from_str(&new_vault_toml("My \"Vault\"")).unwrap();
         assert_eq!(v.name.as_deref(), Some("My \"Vault\""));
-        let c: ChestConfig =
-            toml::from_str(&new_chest_toml("Notes", Some("_shared/t.typ"))).unwrap();
+        let c: ChestConfig = toml::from_str(&new_chest_toml(
+            "Notes",
+            NoteFormat::Typst,
+            Some("_shared/t.typ"),
+        ))
+        .unwrap();
         assert_eq!(c.template.as_deref(), Some("_shared/t.typ"));
-        let c: ChestConfig = toml::from_str(&new_chest_toml("Notes", None)).unwrap();
+        let c: ChestConfig =
+            toml::from_str(&new_chest_toml("Notes", NoteFormat::Markdown, None)).unwrap();
         assert!(c.template.is_none());
+        assert_eq!(c.default_format, NoteFormat::Markdown);
     }
 }

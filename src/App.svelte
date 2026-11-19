@@ -159,15 +159,24 @@
         <button class="ghost" onclick={() => ui.showSearch()} title="Search (⌘⇧F)">Search</button>
       {/if}
       {#if app.note}
-        <button
-          class="ghost toggle"
-          class:on={app.sourceMode}
-          onclick={() => app.toggleSource()}
-          title="Show the {app.note.format === 'typst' ? 'Typst' : 'Markdown'} source (⌘⇧T)"
-          aria-pressed={app.sourceMode}
-        >
-          {app.note.format === "typst" ? "Typst" : "Markdown"}
-        </button>
+        <div class="segmented" role="group" aria-label="View mode (⌘⇧T switches)">
+          <button
+            class:on={!app.sourceMode}
+            aria-pressed={!app.sourceMode}
+            onclick={() => app.sourceMode && app.toggleSource()}
+            title="Writing: formatted, markup hidden until you click into it (⌘⇧T)"
+          >
+            Writing
+          </button>
+          <button
+            class:on={app.sourceMode}
+            aria-pressed={app.sourceMode}
+            onclick={() => !app.sourceMode && app.toggleSource()}
+            title="Source: the plain {app.note.format === 'typst' ? 'Typst' : 'Markdown'} text (⌘⇧T)"
+          >
+            Source
+          </button>
+        </div>
         <button
           class="ghost toggle"
           class:on={ui.rightOpen && ui.rightTab === "preview"}
@@ -382,6 +391,26 @@
   }
   .gear {
     font-size: 15px;
+  }
+  .segmented {
+    display: inline-flex;
+    padding: 2px;
+    gap: 2px;
+    border-radius: 7px;
+    background: var(--hover);
+  }
+  .segmented button {
+    border: none;
+    background: none;
+    padding: 3px 10px;
+    border-radius: 5px;
+    color: var(--muted);
+    font-size: 13px;
+  }
+  .segmented button.on {
+    background: var(--bg);
+    color: var(--fg);
+    box-shadow: 0 1px 2px rgb(0 0 0 / 0.12);
   }
   .toggle.on {
     color: var(--accent);

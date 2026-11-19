@@ -285,7 +285,7 @@ mod tests {
         };
         std::env::set_var("AMBER_TINYMIST", bin);
         let dir = tempfile::tempdir().unwrap();
-        let v = Vault::create(dir.path(), "V").unwrap();
+        let v = crate::vault::test_vault(dir.path());
         fs::create_dir_all(v.root().join("Notes/img")).unwrap();
         fs::write(v.root().join("Notes/img/dot.svg"), r#"<svg xmlns="http://www.w3.org/2000/svg" width="10" height="10"><rect width="10" height="10"/></svg>"#).unwrap();
         let ws = dir.path().join("cache/render");

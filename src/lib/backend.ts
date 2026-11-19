@@ -112,7 +112,8 @@ export const setReopenLastVault = (enabled: boolean) =>
   invoke<void>("set_reopen_last_vault", { enabled });
 
 export const listChests = () => invoke<ChestInfo[]>("list_chests");
-export const createChest = (name: string) => invoke<ChestInfo>("create_chest", { name });
+export const createChest = (name: string, format: NoteFormat) =>
+  invoke<ChestInfo>("create_chest", { name, format });
 export const makeChest = (folder: string) => invoke<ChestInfo>("make_chest", { folder });
 export const updateChest = (folder: string, update: ChestUpdate) =>
   invoke<ChestInfo>("update_chest", { folder, update });

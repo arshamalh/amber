@@ -178,8 +178,8 @@ class AppStore {
     }
   }
 
-  async createChest(name: string) {
-    const info = await api.createChest(name);
+  async createChest(name: string, format: NoteFormat) {
+    const info = await api.createChest(name, format);
     await this.refreshChests();
     await this.openChest(info.folder);
   }

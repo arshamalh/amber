@@ -73,14 +73,7 @@ export function trash(path: string, isDir: boolean) {
 
 export function newChest() {
   if (!app.vault) return;
-  ui.open({
-    kind: "prompt",
-    title: "New chest",
-    label: "Name (also the folder name)",
-    value: "",
-    submit: "Create",
-    onsubmit: (v) => app.createChest(v),
-  });
+  ui.open({ kind: "new-chest" });
 }
 
 export function openVault() {
@@ -114,7 +107,7 @@ export const commands: Command[] = [
   { id: "view.sidebar", title: "Toggle sidebar", shortcut: `${mod}\\`, run: () => (ui.sidebarOpen = !ui.sidebarOpen) },
   {
     id: "view.source",
-    title: "Show Typst / Markdown source (toggle)",
+    title: "Switch Writing / Source",
     shortcut: `${mod}⇧T`,
     when: () => !!app.note,
     run: () => app.toggleSource(),

@@ -111,7 +111,8 @@ impl Vault {
         Ok(Self { root })
     }
 
-    /// Creates `parent/name` as a new vault with a starter chest.
+    /// Creates `parent/name` as a new, empty vault (`amber.toml` and
+    /// `_shared/`). The user creates the first chest next.
     pub fn create(parent: impl AsRef<Path>, name: &str) -> Result<Self> {
         check_name(name)?;
         let dir = parent.as_ref().join(name);
@@ -121,8 +122,6 @@ impl Vault {
         fs::create_dir_all(&dir)?;
         let vault = Self::open(&dir)?;
         vault.init(name)?;
-        let chest = vault.create_chest("Notes")?;
-        vault.create_note(&format!("{}/Welcome.typ", chest.folder), WELCOME_NOTE)?;
         Ok(vault)
     }
 
@@ -201,7 +200,9 @@ impl Vault {
         self.chest_info(folder)
     }
 
-    pub fn create_chest(&self, name: &str) -> Result<ChestInfo> {
+    /// Creates a new chest whose new notes use `format`.
+    /// The vault's first chest also gets a short Welcome note.
+    pub fn create_chest(&self, name: &str, format: NoteFormat) -> Result<ChestInfo> {
         check_name(name)?;
         if name.starts_with('_') {
             return Err(VaultError::InvalidName(name.to_owned()));
@@ -210,22 +211,43 @@ impl Vault {
         if dir.exists() {
             return Err(VaultError::Exists(name.to_owned()));
         }
+        let first = !self.chests()?.iter().any(|c| c.is_chest);
         fs::create_dir(&dir)?;
-        self.make_chest(name)
+        let info = self.write_chest_toml(name, format)?;
+        if first {
+            let welcome = match format {
+                NoteFormat::Typst => WELCOME_TYP,
+                NoteFormat::Markdown => WELCOME_MD,
+            };
+            self.create_note(&format!("{name}/Welcome.{}", format.ext()), welcome)?;
+        }
+        Ok(info)
     }
 
-    /// Adds a `chest.toml` to an existing first-level folder.
+    /// Adds a `chest.toml` to an existing first-level folder. New notes use
+    /// whichever format most of its notes already use (Typst on a tie).
     pub fn make_chest(&self, folder: &str) -> Result<ChestInfo> {
+        let notes = self.notes_in(folder)?;
+        let md = notes.iter().filter(|p| p.ends_with(".md")).count();
+        let format = if md > notes.len() - md {
+            NoteFormat::Markdown
+        } else {
+            NoteFormat::Typst
+        };
+        self.write_chest_toml(folder, format)
+    }
+
+    fn write_chest_toml(&self, folder: &str, format: NoteFormat) -> Result<ChestInfo> {
         let dir = self.chest_dir(folder)?;
+        let template = format!("{SHARED_DIR}/templates/note.{}", format.ext());
         let template = self
             .root
-            .join(SHARED_DIR)
-            .join("templates/note.typ")
+            .join(&template)
             .is_file()
-            .then_some("_shared/templates/note.typ");
+            .then_some(template.as_str());
         write_new(
             &dir.join(CHEST_FILE),
-            &config::new_chest_toml(folder, template),
+            &config::new_chest_toml(folder, format, template),
         )?;
         self.chest_info(folder)
     }
@@ -463,6 +485,14 @@ pub fn import_into_assets(vault: &Vault, chest: &str, source: &Path) -> Result<S
     Ok(format!("{chest}/assets/{candidate}"))
 }
 
+/// A vault with one Typst chest, "Notes", holding `Welcome.typ` (for tests).
+#[cfg(test)]
+pub fn test_vault(parent: &Path) -> Vault {
+    let v = Vault::create(parent, "V").unwrap();
+    v.create_chest("Notes", NoteFormat::Typst).unwrap();
+    v
+}
+
 /// The chest folder a vault-relative path belongs to.
 pub fn chest_of(rel: &str) -> &str {
     rel.split('/').next().unwrap_or("")
@@ -588,14 +618,24 @@ const TEMPLATE_TYP: &str = r#"#import "/_shared/amber.typ": *
 
 const TEMPLATE_MD: &str = "# {{title}}\n\n";
 
-const WELCOME_NOTE: &str = r#"#import "/_shared/amber.typ": *
+const WELCOME_MD: &str = r#"# Welcome to Amber
+
+This chest is a plain folder, and this note is a plain `.md` file.
+
+- Link to another note with [[Second note]]. Click it to open it; it is created if it does not exist.
+- Type `/` on a new line to add headings, lists, tables, images and more.
+- Press Cmd/Ctrl+P to jump to a note, or Cmd/Ctrl+Shift+F to search this chest.
+"#;
+
+const WELCOME_TYP: &str = r#"#import "/_shared/amber.typ": *
 #show: amber
 
 = Welcome to Amber
 
 This chest is a plain folder, and this note is a plain `.typ` file.
 
-- Link to another note with [[Second note]]. Cmd/Ctrl+click it to open it; it is created if it does not exist.
+- Link to another note with [[Second note]]. Click it to open it; it is created if it does not exist.
+- Type `/` on a new line to add headings, lists, tables, images and more.
 - Press Cmd/Ctrl+P to jump to a note, or Cmd/Ctrl+Shift+F to search this chest.
 - Maths works out of the box: $e^(i pi) + 1 = 0$.
 "#;
@@ -606,15 +646,24 @@ mod tests {
 
     fn vault() -> (tempfile::TempDir, Vault) {
         let dir = tempfile::tempdir().unwrap();
-        let v = Vault::create(dir.path(), "MyVault").unwrap();
+        let v = test_vault(dir.path());
         (dir, v)
     }
 
     #[test]
-    fn create_sets_up_vault_and_starter_chest() {
+    fn create_makes_an_empty_vault() {
+        let dir = tempfile::tempdir().unwrap();
+        let v = Vault::create(dir.path(), "Empty").unwrap();
+        assert!(v.is_initialized());
+        assert!(v.chests().unwrap().is_empty());
+        assert!(v.root().join("_shared/amber.typ").is_file());
+    }
+
+    #[test]
+    fn first_chest_gets_a_welcome_note() {
         let (_d, v) = vault();
         assert!(v.is_initialized());
-        assert_eq!(v.display_name(), "MyVault");
+        assert_eq!(v.display_name(), "V");
         let chests = v.chests().unwrap();
         assert_eq!(chests.len(), 1);
         assert!(chests[0].is_chest);
@@ -634,7 +683,54 @@ mod tests {
             .map(|c| (c.folder.as_str(), c.is_chest))
             .collect();
         assert_eq!(names, [("Notes", true), ("drafts", false)]);
-        assert!(v.make_chest("drafts").unwrap().is_chest);
+        let made = v.make_chest("drafts").unwrap();
+        assert!(made.is_chest);
+        assert_eq!(
+            made.default_format,
+            NoteFormat::Typst,
+            "empty folder: Typst"
+        );
+    }
+
+    #[test]
+    fn existing_folders_keep_their_format() {
+        let (_d, v) = vault();
+        fs::create_dir_all(v.root().join("obsidian/sub")).unwrap();
+        for f in ["a.md", "b.md", "sub/c.md", "d.typ"] {
+            fs::write(v.root().join("obsidian").join(f), "x").unwrap();
+        }
+        let made = v.make_chest("obsidian").unwrap();
+        assert_eq!(made.default_format, NoteFormat::Markdown);
+        assert_eq!(made.template.as_deref(), Some("_shared/templates/note.md"));
+        fs::create_dir(v.root().join("tie")).unwrap();
+        fs::write(v.root().join("tie/a.md"), "x").unwrap();
+        fs::write(v.root().join("tie/b.typ"), "x").unwrap();
+        assert_eq!(
+            v.make_chest("tie").unwrap().default_format,
+            NoteFormat::Typst
+        );
+    }
+
+    #[test]
+    fn chests_and_vaults_take_a_format() {
+        let dir = tempfile::tempdir().unwrap();
+        let v = Vault::create(dir.path(), "MdVault").unwrap();
+        v.create_chest("Notes", NoteFormat::Markdown).unwrap();
+        // The first chest gets a Welcome note in its own format.
+        assert_eq!(v.notes_in("Notes").unwrap(), ["Notes/Welcome.md"]);
+        assert_eq!(
+            v.chest_info("Notes").unwrap().default_format,
+            NoteFormat::Markdown
+        );
+        let text = fs::read_to_string(v.root().join("Notes/chest.toml")).unwrap();
+        assert!(text.contains("default_format = \"markdown\""), "{text}");
+        let typ = v.create_chest("Thesis", NoteFormat::Typst).unwrap();
+        assert_eq!(typ.default_format, NoteFormat::Typst);
+        assert_eq!(typ.template.as_deref(), Some("_shared/templates/note.typ"));
+        assert!(
+            v.notes_in("Thesis").unwrap().is_empty(),
+            "only the first chest is greeted"
+        );
     }
 
     #[test]
@@ -712,7 +808,7 @@ mod tests {
             Err(VaultError::NotANote(_))
         ));
         for bad in ["", " x", "a:b", ".hidden", "_system"] {
-            assert!(v.create_chest(bad).is_err(), "{bad}");
+            assert!(v.create_chest(bad, NoteFormat::Typst).is_err(), "{bad}");
         }
         assert!(matches!(
             v.create_note("Notes/a?.typ", ""),
