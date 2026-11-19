@@ -6,6 +6,7 @@
 //! `src-tauri/tinymist.version` and fetched by `scripts/fetch-tinymist.mjs`.
 
 mod framing;
+pub mod render;
 
 use std::path::{Path, PathBuf};
 use std::process::Stdio;
@@ -35,8 +36,19 @@ pub fn binary_path() -> PathBuf {
 /// `root` is the Typst project root (the vault), so `/_shared/...` imports
 /// resolve the same way as in the preview.
 pub async fn export_pdf(root: &Path, input: &Path, output: &Path) -> Result<(), String> {
+    compile(root, input, output, &[]).await
+}
+
+/// Runs `tinymist compile` (the output format follows `output`'s extension).
+pub async fn compile(
+    root: &Path,
+    input: &Path,
+    output: &Path,
+    extra: &[&str],
+) -> Result<(), String> {
     let mut cmd = Command::new(binary_path());
     cmd.arg("compile")
+        .args(extra)
         .arg("--root")
         .arg(root)
         .arg(input)
@@ -58,7 +70,7 @@ pub async fn export_pdf(root: &Path, input: &Path, output: &Path) -> Result<(), 
             msg = String::from_utf8_lossy(&out.stdout).trim().to_owned();
         }
         Err(if msg.is_empty() {
-            "PDF export failed".into()
+            "Typst compile failed".into()
         } else {
             msg
         })

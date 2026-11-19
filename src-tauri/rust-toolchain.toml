@@ -1,0 +1,5 @@
+# Pins the toolchain for local builds, CI and rust-analyzer.
+# Bump this deliberately (then run the checks in AGENTS.md).
+[toolchain]
+channel = "1.100.0"
+components = ["rustfmt", "clippy", "rust-src"]

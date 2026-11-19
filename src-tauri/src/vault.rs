@@ -403,7 +403,7 @@ impl Vault {
 
     /// Resolves a vault-relative path. Rejects absolute paths, `..`, `.`,
     /// and paths that leave the vault through a symlink.
-    fn resolve(&self, rel: &str) -> Result<PathBuf> {
+    pub(crate) fn resolve(&self, rel: &str) -> Result<PathBuf> {
         let rel_path = Path::new(rel);
         if rel.is_empty()
             || rel.contains('\\')
@@ -426,6 +426,41 @@ impl Vault {
         }
         Ok(full)
     }
+}
+
+/// The path of `target` relative to the folder `from_dir` (both
+/// vault-relative), e.g. `Notes/sub` → `Notes/img/a.png` = `../img/a.png`.
+pub fn relative_to(from_dir: &str, target: &str) -> String {
+    let from: Vec<&str> = from_dir.split('/').filter(|s| !s.is_empty()).collect();
+    let to: Vec<&str> = target.split('/').filter(|s| !s.is_empty()).collect();
+    let common = from.iter().zip(&to).take_while(|(a, b)| a == b).count();
+    let mut parts = vec![".."; from.len() - common];
+    parts.extend(&to[common..]);
+    parts.join("/")
+}
+
+/// Copies an outside file into `<chest>/assets/`, picking a free name.
+/// Returns the new vault-relative path.
+pub fn import_into_assets(vault: &Vault, chest: &str, source: &Path) -> Result<String> {
+    let name = source
+        .file_name()
+        .map(|n| n.to_string_lossy().into_owned())
+        .ok_or_else(|| VaultError::InvalidName(source.display().to_string()))?;
+    let (stem, ext) = match name.rsplit_once('.') {
+        Some((s, e)) if !s.is_empty() => (s.to_owned(), format!(".{e}")),
+        _ => (name.clone(), String::new()),
+    };
+    let dir = vault.resolve(&format!("{chest}/assets"))?;
+    fs::create_dir_all(&dir)?;
+    let mut candidate = name.clone();
+    let mut n = 1;
+    while dir.join(&candidate).exists() {
+        candidate = format!("{stem}-{n}{ext}");
+        n += 1;
+    }
+    check_name(&candidate)?;
+    fs::copy(source, dir.join(&candidate))?;
+    Ok(format!("{chest}/assets/{candidate}"))
 }
 
 /// The chest folder a vault-relative path belongs to.
@@ -712,6 +747,28 @@ mod tests {
             .unwrap();
         assert!(daily.starts_with("# 20") && daily.len() == 13, "{daily}");
         assert_eq!(v.templates().unwrap().len(), 3);
+    }
+
+    #[test]
+    fn relative_paths_and_asset_import() {
+        assert_eq!(relative_to("Notes/sub", "Notes/img/a.png"), "../img/a.png");
+        assert_eq!(relative_to("Notes", "Notes/a.png"), "a.png");
+        assert_eq!(
+            relative_to("Notes/a/b", "Notes/assets/x.png"),
+            "../../assets/x.png"
+        );
+        let (_d, v) = vault();
+        let outside = tempfile::tempdir().unwrap();
+        let src = outside.path().join("pic.png");
+        fs::write(&src, b"png").unwrap();
+        assert_eq!(
+            import_into_assets(&v, "Notes", &src).unwrap(),
+            "Notes/assets/pic.png"
+        );
+        assert_eq!(
+            import_into_assets(&v, "Notes", &src).unwrap(),
+            "Notes/assets/pic-1.png"
+        );
     }
 
     #[test]

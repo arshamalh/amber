@@ -228,9 +228,38 @@ class AppStore {
     }
   }
 
+  /** Whether the page view (Tinymist preview) is showing. */
+  private previewWanted = false;
+
+  /** Starts or stops Tinymist's page preview with the page-view panel. */
+  async setPreviewWanted(wanted: boolean) {
+    if (wanted === this.previewWanted) return;
+    this.previewWanted = wanted;
+    if (wanted) await this.startPreview();
+    else {
+      this.previewUrl = null;
+      await this.engine?.stopPreview();
+    }
+  }
+
+  // ---- writing view / "Show Typst" ----------------------------------------
+
+  /** True when the open note shows its plain source ("Show Typst"). */
+  sourceMode = $state(false);
+
+  private sourceKey(path: string) {
+    return `amber:source:${this.vault?.root}:${path}`;
+  }
+
+  toggleSource() {
+    if (!this.note) return;
+    this.sourceMode = !this.sourceMode;
+    local.set(this.sourceKey(this.note.path), this.sourceMode ? "1" : "0");
+  }
+
   private async startPreview() {
     const note = this.note;
-    if (!note || note.format !== "typst" || !this.engine) return;
+    if (!this.previewWanted || !note || note.format !== "typst" || !this.engine) return;
     try {
       const url = await this.engine.startPreview(note.enginePath, this.dark);
       if (this.note?.path === note.path) this.previewUrl = url;
@@ -249,6 +278,7 @@ class AppStore {
       this.lastSaved = note.text;
       this.liveText = note.text;
       this.previewUrl = null;
+      this.sourceMode = local.get(this.sourceKey(path)) === "1";
       this.selectedDir = api.dirName(path);
       this.editorKey++;
       this.linksVersion++;

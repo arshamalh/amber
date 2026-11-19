@@ -82,7 +82,9 @@ npm run fetch-tinymist   # downloads the pinned Tinymist and checks its SHA-256
 npm run tauri dev        # or: AMBER_VAULT=/path/to/folder npm run tauri dev
 ```
 
-Shortcuts: ⌘/Ctrl+P go to note, ⌘/Ctrl+Shift+P commands, ⌘/Ctrl+Shift+F search, ⌘/Ctrl+Shift+O switch chest, ⌘/Ctrl+N new note, ⌘/Ctrl+E export PDF, ⌘/Ctrl+, settings, ⌘/Ctrl+click a `[[link]]` to follow it.
+Notes open in a writing view: markup is hidden until you put the cursor on it, and maths and blocks show their Typst output. Type `/` for blocks; press ⌘/Ctrl+Shift+T (or the Typst button) to see the plain source.
+
+Shortcuts: ⌘/Ctrl+P go to note, ⌘/Ctrl+Shift+T show source, ⌘/Ctrl+Shift+P commands, ⌘/Ctrl+Shift+F search, ⌘/Ctrl+Shift+O switch chest, ⌘/Ctrl+N new note, ⌘/Ctrl+E export PDF, ⌘/Ctrl+, settings, ⌘/Ctrl+click a `[[link]]` to follow it.
 
 Checks: `npm run check`, then in `src-tauri/`: `cargo fmt --check`, `cargo clippy --all-targets -- -D warnings`, `cargo test`. Decisions are recorded in [`docs/adr/`](docs/adr/).
 

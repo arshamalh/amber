@@ -10,6 +10,7 @@
   --bad: #b3261e;
   --bad-bg: #fdecea;
   --preview-bg: #f1ede6;
+  --prose: "Iowan Old Style", "Charter", "Source Serif Pro", Georgia, ui-serif, serif;
   --mono: ui-monospace, "SF Mono", "Cascadia Code", "JetBrains Mono", Menlo, Consolas, monospace;
   color-scheme: light dark;
   font-family: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
@@ -66,4 +67,56 @@ input {
 }
 code {
   font-family: var(--mono);
+}
+
+/* Typst renders black on transparent; flip it for dark mode. */
+@media (prefers-color-scheme: dark) {
+  .cm-lp-render img {
+    filter: invert(1) hue-rotate(180deg);
+  }
+}
+
+/* Completion and the "/" menu: match the app instead of CodeMirror's defaults. */
+.cm-tooltip.cm-tooltip-autocomplete {
+  background: var(--bg);
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  box-shadow: 0 8px 24px rgb(0 0 0 / 0.16);
+  padding: 4px;
+  font-family: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+}
+.cm-tooltip.cm-tooltip-autocomplete > ul {
+  font-family: inherit !important;
+  max-height: 18em;
+}
+.cm-tooltip.cm-tooltip-autocomplete > ul > li {
+  padding: 4px 10px;
+  border-radius: 6px;
+  line-height: 1.5;
+}
+.cm-tooltip.cm-tooltip-autocomplete > ul > li[aria-selected] {
+  background: var(--accent-bg);
+  color: var(--fg);
+}
+.cm-tooltip-autocomplete .cm-completionLabel {
+  font-weight: 500;
+}
+.cm-tooltip-autocomplete .cm-completionDetail {
+  font-style: normal;
+  color: var(--muted);
+  margin-left: 10px;
+  font-size: 12px;
+}
+.cm-tooltip-autocomplete .cm-completionMatchedText {
+  text-decoration: none;
+  color: var(--accent);
+}
+.cm-tooltip-autocomplete .cm-completionIcon-keyword,
+.cm-tooltip-autocomplete .cm-completionIcon-text {
+  display: none;
+}
+.cm-tooltip {
+  background: var(--bg);
+  color: var(--fg);
+  border-color: var(--line);
 }

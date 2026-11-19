@@ -10,7 +10,9 @@ Current phase: **Phase 1 · MVP**. Built: vaults (create with optional git, clon
 
 Also built: PDF export for Markdown notes through a Typst conversion, and "Update links?" after renames (ADR 0006); a vault menu and Settings (⌘,).
 
-Known gaps: renames outside Amber are not detected (note ids are the planned fix); no Typst → Markdown export or format switch yet; links in the Typst preview are not clickable. Next direction: live-preview editing with a "Show Typst" switch.
+Phase 2 started (ADR 0007): the default **writing view** hides markup away from the cursor and shows maths and `#function(...)` blocks rendered by Typst; "Show Typst" (⌘⇧T) shows the plain source; a `/` menu inserts blocks. The Tinymist page preview is an optional "Page" view. Still to do in Phase 2: forms for editing blocks, diagram blocks (fletcher, Mermaid), a visual diagram editor, saved views.
+
+Known gaps: renames outside Amber are not detected (note ids are the planned fix); no Typst → Markdown export or format switch yet; links in the Tinymist page view are not clickable.
 
 ## Layout
 
@@ -21,7 +23,7 @@ Rust core (`src-tauri/src/`):
 - `links.rs`: `[[link]]` parsing and chest-scoped resolution.
 - `index.rs`: the open chest's in-memory index (Tantivy in RAM + link graph). ADR 0004.
 - `watcher.rs`: file watcher; external edits update the index and reach the UI as `vault-changed`.
-- `typst/`: the Typst engine adapter (Tinymist LSP, PDF compile). The only code that runs Tinymist.
+- `typst/`: the Typst engine adapter (Tinymist LSP, PDF compile, `render.rs` for writing-view fragments). The only code that runs Tinymist.
 - `export.rs`, `md2typst.rs`: PDF export; Markdown notes are converted to Typst in a temp folder in the app cache, never the vault.
 - `git.rs`: system `git` for init and clone. `markdown.rs`: comrak rendering. `settings.rs`: per-device app settings (recent vaults), outside the vault.
 - `commands.rs`: Tauri commands, the UI's only way in. Chest-scoped commands check paths against the open chest.
@@ -32,6 +34,8 @@ UI (`src/`):
 - `lib/ui.svelte.ts`: dialogs, palette, panels. `lib/actions.ts`: shared actions and the command list.
 - `lib/engine.ts`: LSP transport over Tauri IPC, `@codemirror/lsp-client`, preview start/stop.
 - `lib/wiki.ts`: `[[link]]` highlighting, Cmd/Ctrl+click, completion in CodeMirror.
+- `lib/typst-lang.ts`: Typst language from `codemirror-lang-typst`'s Lezer parser (no completion/linter from it; Tinymist provides those).
+- `lib/live/`: the writing view (ADR 0007). `typst.ts` / `markdown.ts` turn syntax trees into decorations (`context.ts` holds the builder), `widgets.ts`, `render.ts` (fragment cache, batched `render_fragments` calls), `slash.ts` (the `/` menu). Lezer nodes are fresh objects on every access: compare positions, never identity.
 - `lib/components/`: Welcome, FileTree, SearchPanel, LinksPanel, MarkdownPreview, CommandPalette, Dialogs.
 
 Other: `src-tauri/tinymist.version` (pinned Tinymist; `npm run fetch-tinymist` installs it), `docs/adr/` (decisions).

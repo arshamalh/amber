@@ -144,6 +144,8 @@ export const exportPdf = (path: string) => invoke<ExportResult | null>("export_p
 export const revealPath = (path: string) => invoke<void>("reveal_path", { path });
 export const revealVaultPath = (path: string) => invoke<void>("reveal_vault_path", { path });
 export const openExternal = (url: string) => invoke<void>("open_external", { url });
+/** Asks for an image; returns its path relative to the note (copied into the chest if needed). */
+export const importAsset = (note: string) => invoke<string | null>("import_asset", { note });
 
 // ---- path helpers (pure string work, no file access) ----
 

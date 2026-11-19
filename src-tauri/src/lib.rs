@@ -32,6 +32,8 @@ pub struct AppState {
     index: Mutex<Option<ChestIndex>>,
     watcher: Mutex<Option<watcher::VaultWatcher>>,
     engine: tokio::sync::Mutex<Option<typst::Engine>>,
+    /// Serializes fragment renders (they share one scratch folder).
+    render_lock: tokio::sync::Mutex<()>,
     settings: Mutex<Settings>,
     settings_path: PathBuf,
 }
@@ -44,6 +46,7 @@ impl AppState {
             index: Mutex::default(),
             watcher: Mutex::default(),
             engine: tokio::sync::Mutex::default(),
+            render_lock: tokio::sync::Mutex::default(),
             settings: Mutex::new(Settings::load(&settings_path)),
             settings_path,
         }
@@ -150,6 +153,8 @@ pub fn run() {
             commands::open_external,
             commands::engine_start,
             commands::engine_send,
+            commands::render_fragments,
+            commands::import_asset,
         ])
         .build(tauri::generate_context!())
         .expect("error while building Amber");

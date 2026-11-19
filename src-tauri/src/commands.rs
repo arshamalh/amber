@@ -597,6 +597,84 @@ pub async fn reveal_path(app: AppHandle, path: String) -> CmdResult<()> {
     app.opener().reveal_item_in_dir(path).map_err(err)
 }
 
+// ---- live preview ---------------------------------------------------------
+
+/// Renders Typst fragments of a note to SVG for the writing view (ADR 0007).
+#[tauri::command]
+pub async fn render_fragments(
+    app: AppHandle,
+    note: String,
+    preamble: String,
+    fragments: Vec<typst::render::Fragment>,
+    files: Vec<String>,
+) -> CmdResult<Vec<typst::render::Rendered>> {
+    let state = app.state::<AppState>();
+    let v = state.scoped(&note).map_err(err)?;
+    let chest = state.chest().map_err(err)?;
+    // Referenced files must come from the open chest or `_shared/`.
+    let files: Vec<String> = files
+        .into_iter()
+        .filter(|f| {
+            vault::ensure_in_chest(f, &chest).is_ok()
+                || f.starts_with(&format!("{}/", vault::SHARED_DIR))
+        })
+        .collect();
+    let workspace = app
+        .path()
+        .app_cache_dir()
+        .map_err(err)?
+        .join("render")
+        .join(std::process::id().to_string());
+    let note_dir = note.rsplit_once('/').map_or("", |(d, _)| d).to_owned();
+    let _guard = state.render_lock.lock().await;
+    typst::render::render(typst::render::Request {
+        vault: &v,
+        note_dir: &note_dir,
+        preamble: &preamble,
+        fragments: &fragments,
+        files: &files,
+        workspace: &workspace,
+    })
+    .await
+}
+
+/// Asks for an image and returns its path relative to the note's folder.
+/// Files outside the vault are copied into `<chest>/assets/` first.
+#[tauri::command]
+pub async fn import_asset(app: AppHandle, note: String) -> CmdResult<Option<String>> {
+    let state = app.state::<AppState>();
+    let v = state.scoped(&note).map_err(err)?;
+    let chest = state.chest().map_err(err)?;
+    let (tx, rx) = tokio::sync::oneshot::channel();
+    app.dialog()
+        .file()
+        .add_filter(
+            "Images",
+            &["png", "jpg", "jpeg", "gif", "svg", "webp", "pdf"],
+        )
+        .pick_file(move |p| {
+            let _ = tx.send(p);
+        });
+    let Some(picked) = rx.await.map_err(err)?.and_then(|p| p.into_path().ok()) else {
+        return Ok(None);
+    };
+    let picked = dunce::canonicalize(&picked).map_err(err)?;
+    let in_chest = picked.strip_prefix(v.root().join(&chest)).ok().map(|rel| {
+        let rel = rel
+            .components()
+            .map(|c| c.as_os_str().to_string_lossy())
+            .collect::<Vec<_>>()
+            .join("/");
+        format!("{chest}/{rel}")
+    });
+    let target = match in_chest {
+        Some(p) => p,
+        None => vault::import_into_assets(&v, &chest, &picked).map_err(err)?,
+    };
+    let note_dir = note.rsplit_once('/').map_or("", |(d, _)| d);
+    Ok(Some(vault::relative_to(note_dir, &target)))
+}
+
 // ---- Typst engine -----------------------------------------------------------------
 
 /// What the engine channel carries to the UI.

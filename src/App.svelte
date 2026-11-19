@@ -4,6 +4,8 @@
   import * as actions from "./lib/actions";
   import * as api from "./lib/backend";
   import { wikiLinks } from "./lib/wiki";
+  import { livePreview } from "./lib/live";
+  import { slashMenu } from "./lib/live/slash";
   import Editor from "./lib/Editor.svelte";
   import Welcome from "./lib/components/Welcome.svelte";
   import FileTree from "./lib/components/FileTree.svelte";
@@ -41,8 +43,10 @@
     if (key === "e" && !e.shiftKey) return hit(() => void app.exportPdf());
     if (key === "\\") return hit(() => (ui.sidebarOpen = !ui.sidebarOpen));
     if (key === ",") return hit(() => ui.open({ kind: "settings" }));
+    if (key === "t" && e.shiftKey) return hit(() => app.toggleSource());
   }
 
+  // Built once per opened note (app.note is replaced on open, not on edits).
   const wiki = $derived(
     app.note && app.chest
       ? [
@@ -52,9 +56,29 @@
             notes: () => app.notes,
             follow: (t) => void app.follow(t),
           }),
+          slashMenu({
+            format: app.note.format,
+            pickImage: () => api.importAsset(app.note!.path).catch((e) => (app.fail(e), null)),
+          }),
         ]
       : [],
   );
+
+  const writing = $derived(
+    app.note
+      ? livePreview({
+          format: app.note.format,
+          notePath: app.note.path,
+          follow: (t) => void app.follow(t),
+          openUrl: (u) => void api.openExternal(u).catch(app.fail),
+        })
+      : [],
+  );
+
+  // Tinymist's page preview runs only while the page view is open.
+  $effect(() => {
+    void app.setPreviewWanted(ui.rightOpen && ui.rightTab === "preview");
+  });
 
   let vaultMenu = $state(false);
   const otherRecents = $derived((app.info?.recentVaults ?? []).filter((p) => p !== app.vault?.root).slice(0, 6));
@@ -135,6 +159,27 @@
         <button class="ghost" onclick={() => ui.showSearch()} title="Search (⌘⇧F)">Search</button>
       {/if}
       {#if app.note}
+        <button
+          class="ghost toggle"
+          class:on={app.sourceMode}
+          onclick={() => app.toggleSource()}
+          title="Show the {app.note.format === 'typst' ? 'Typst' : 'Markdown'} source (⌘⇧T)"
+          aria-pressed={app.sourceMode}
+        >
+          {app.note.format === "typst" ? "Typst" : "Markdown"}
+        </button>
+        <button
+          class="ghost toggle"
+          class:on={ui.rightOpen && ui.rightTab === "preview"}
+          onclick={() => {
+            const showing = ui.rightOpen && ui.rightTab === "preview";
+            ui.rightOpen = !showing;
+            ui.rightTab = "preview";
+          }}
+          title="Page view: how the note prints"
+        >
+          Page
+        </button>
         <button class="ghost" onclick={() => app.exportPdf()} title="Export PDF (⌘E)">PDF</button>
       {/if}
       <button class="ghost" onclick={() => (ui.palette = "commands")} title="All commands (⌘⇧P)">⋯</button>
@@ -200,6 +245,8 @@
                 note={{ ...app.note, text: app.liveText }}
                 client={app.engineStatus === "running" ? (app.engine?.client ?? null) : null}
                 extensions={wiki}
+                {writing}
+                source={app.sourceMode}
                 onchange={app.onEdit}
               />
             {/key}
@@ -335,6 +382,11 @@
   }
   .gear {
     font-size: 15px;
+  }
+  .toggle.on {
+    color: var(--accent);
+    border-color: var(--accent-bg);
+    background: var(--accent-bg);
   }
   .vault-name,
   .sep,

@@ -34,7 +34,8 @@ class UiStore {
   sidebar = $state<"files" | "search">("files");
   sidebarOpen = $state(true);
   rightTab = $state<"preview" | "links">("preview");
-  rightOpen = $state(true);
+  /** The side panel (page view / links) starts closed: writing comes first. */
+  rightOpen = $state(false);
   /** Bumped to focus the search box. */
   searchFocus = $state(0);
 

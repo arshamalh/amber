@@ -149,7 +149,7 @@ Five phases: desktop daily use first, mobile last.
 flowchart TB
   P0["Phase 0 · Spike — prove the stack<br/>Tauri 2 + Rust skeleton, Tinymist sidecar, CodeMirror with LSP,<br/>live preview panel, ADRs, CI builds for Linux, macOS, Windows"]
   P1["Phase 1 · MVP — desktop, daily use<br/>Vaults and chests, chest.toml, scoped tree and search, Markdown,<br/>[[links]], backlinks, templates, PDF export, opt-in git and clone"]
-  P2["Phase 2 · Blocks — no Typst knowledge<br/>Block toolbars and forms for ~10 block types, fletcher and<br/>Mermaid diagram blocks, a visual diagram editor, saved views"]
+  P2["Phase 2 · Writing view — no Typst knowledge<br/>Live-preview writing view with a Show Typst switch, a / menu for blocks,<br/>forms for blocks, fletcher and Mermaid diagram blocks, a visual diagram editor, saved views"]
   P3["Phase 3 · Books, v1.0 — export and release<br/>Chest to book from chest.toml, Markdown export, git commit and sync,<br/>graph view, installers and auto-update, public v1.0 release"]
   P4["Phase 4 · Mobile — decided later<br/>A separately designed iPad app (Apple Pencil drawing first),<br/>sharing only the vault format with desktop; Android after"]
   P0 -->|"Gate: edit a .typ note with completion and live preview"| P1
@@ -158,7 +158,7 @@ flowchart TB
   P3 -->|"Gate: stable public release on all three desktop systems"| P4
 ```
 
-**Progress:** Phase 0 done (v0.0.1). Phase 1 built and in daily-use testing; see ADRs 0004 and 0005 for its decisions.
+**Progress:** Phase 0 done (v0.0.1). Phase 1 built and released (v0.0.3; ADRs 0004–0006). Phase 2 started: the writing view, "Show Typst" and the `/` menu are built (ADR 0007).
 
 The phases have no dates on purpose. Pass each gate before starting the next phase. Phase 1 is the one that matters most: if you don't use Amber daily for real notes, nothing after it is worth building yet.
 
@@ -175,7 +175,7 @@ The phases have no dates on purpose. Pass each gate before starting the next pha
 All decisions below are made.
 
 - [x] **UI framework:** Svelte 5 (stable, larger ecosystem) over SolidJS (2.0 still a release candidate). See the comparison under Technology and ADR 0002.
-- [x] **Editing model:** source editor + live preview + block toolbars (realistic for v1).
+- [x] **Editing model:** a writing view by default (live preview over the source, markup hidden away from the cursor, maths and blocks rendered by Typst), with a "Show Typst" switch and a `/` menu. Replaces "source editor + preview + block toolbars"; see ADR 0007.
 - [x] **Link syntax in Typst notes:** `[[Note]]` text styled by an Amber Typst package through a show rule (same as Obsidian, looks fine in PDF).
 - [x] **Chest isolation:** strict for now; cross-chest can become an option in the future.
 - [x] **Git:** when creating a new vault, the user decides (an optional checkbox). Some vaults can be cloned in the first place using the app.
