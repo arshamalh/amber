@@ -306,6 +306,67 @@ pub async fn make_chest(folder: String, state: State<'_, AppState>) -> CmdResult
         .map_err(err)
 }
 
+/// Renames a chest (folder and name). If it is the open chest, the UI
+/// reopens it under the new folder.
+#[tauri::command]
+pub async fn rename_chest(
+    folder: String,
+    name: String,
+    state: State<'_, AppState>,
+) -> CmdResult<ChestInfo> {
+    let v = state.vault().map_err(err)?;
+    let info = v.rename_chest(&folder, name.trim()).map_err(err)?;
+    forget_chest(&state, &v, &folder);
+    Ok(info)
+}
+
+/// Moves a chest to the trash.
+#[tauri::command]
+pub async fn delete_chest(folder: String, state: State<'_, AppState>) -> CmdResult<()> {
+    let v = state.vault().map_err(err)?;
+    v.delete_chest(&folder).map_err(err)?;
+    forget_chest(&state, &v, &folder);
+    Ok(())
+}
+
+/// Drops state that refers to a chest folder that no longer exists.
+fn forget_chest(state: &AppState, v: &Vault, folder: &str) {
+    let mut open = state.chest.lock().unwrap();
+    if open.as_deref() == Some(folder) {
+        *open = None;
+        *state.index.lock().unwrap() = None;
+    }
+    drop(open);
+    let root = v.root().to_string_lossy().into_owned();
+    state.with_settings(|s| {
+        if s.last_chest.get(&root).map(String::as_str) == Some(folder) {
+            s.last_chest.remove(&root);
+        }
+    });
+}
+
+/// Asks for a folder (starting in the vault) and opens it as a chest,
+/// adding `chest.toml` if needed. `None` when the user cancels.
+#[tauri::command]
+pub async fn pick_chest_folder(
+    app: AppHandle,
+    state: State<'_, AppState>,
+) -> CmdResult<Option<ChestInfo>> {
+    let vault = state.vault().map_err(err)?;
+    let (tx, rx) = tokio::sync::oneshot::channel();
+    app.dialog()
+        .file()
+        .set_title("Open folder as chest")
+        .set_directory(vault.root())
+        .pick_folder(move |p| {
+            let _ = tx.send(p);
+        });
+    let Some(path) = rx.await.map_err(err)?.and_then(|p| p.into_path().ok()) else {
+        return Ok(None);
+    };
+    vault.folder_as_chest(&path).map(Some).map_err(err)
+}
+
 #[derive(Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct ChestUpdate {

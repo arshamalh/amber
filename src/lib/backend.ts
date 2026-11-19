@@ -140,6 +140,9 @@ export const listChests = () => invoke<ChestInfo[]>("list_chests");
 export const createChest = (name: string, format: NoteFormat) =>
   invoke<ChestInfo>("create_chest", { name, format });
 export const makeChest = (folder: string) => invoke<ChestInfo>("make_chest", { folder });
+export const renameChest = (folder: string, name: string) => invoke<ChestInfo>("rename_chest", { folder, name });
+export const deleteChest = (folder: string) => invoke<void>("delete_chest", { folder });
+export const pickChestFolder = () => invoke<ChestInfo | null>("pick_chest_folder");
 export const updateChest = (folder: string, update: ChestUpdate) =>
   invoke<ChestInfo>("update_chest", { folder, update });
 export const openChest = (folder: string) => invoke<ChestView>("open_chest", { folder });

@@ -216,6 +216,7 @@
           </ul>
           <div class="row">
             <button class="primary" onclick={actions.newChest}>New chest…</button>
+            <button onclick={actions.openFolderAsChest}>Open folder as chest…</button>
           </div>
           {#if otherFolders.length}
             <p class="hint">These folders are not chests yet:</p>

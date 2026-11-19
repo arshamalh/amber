@@ -24,6 +24,7 @@ export type Dialog =
   | { kind: "new-note"; dir: string | null }
   | { kind: "chest-settings" }
   | { kind: "new-chest"; first?: boolean }
+  | { kind: "delete-chest"; folder: string; name: string }
   | { kind: "create-vault" }
   | { kind: "clone-vault" };
 

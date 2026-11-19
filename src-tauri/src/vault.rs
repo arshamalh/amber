@@ -26,6 +26,10 @@ pub enum VaultError {
     OutsideChest(String),
     #[error("not a note (expected .typ or .md): {0}")]
     NotANote(String),
+    #[error(
+        "a chest must be a folder directly inside the vault ({0}); move the folder there first"
+    )]
+    NotChestFolder(String),
     #[error("invalid name: {0:?}")]
     InvalidName(String),
     #[error("already exists: {0}")]
@@ -235,6 +239,47 @@ impl Vault {
             NoteFormat::Typst
         };
         self.write_chest_toml(folder, format)
+    }
+
+    /// Renames a chest: its folder and the `name` in its `chest.toml`.
+    /// Links inside the chest are chest-relative, so they keep working.
+    pub fn rename_chest(&self, folder: &str, name: &str) -> Result<ChestInfo> {
+        check_name(name)?;
+        if name.starts_with('_') {
+            return Err(VaultError::InvalidName(name.to_owned()));
+        }
+        if !self.chest_info(folder)?.is_chest {
+            return Err(VaultError::NotChestFolder(folder.to_owned()));
+        }
+        if name != folder {
+            self.rename(folder, name)?;
+        }
+        self.edit_chest(name, &[("name", Some(name))])
+    }
+
+    /// Moves a whole chest to the system trash.
+    pub fn delete_chest(&self, folder: &str) -> Result<()> {
+        if !self.chest_info(folder)?.is_chest {
+            return Err(VaultError::NotChestFolder(folder.to_owned()));
+        }
+        self.trash(folder)
+    }
+
+    /// Opens a folder picked by absolute path as a chest: it must sit
+    /// directly in the vault root. Adds `chest.toml` unless it has one.
+    pub fn folder_as_chest(&self, path: &Path) -> Result<ChestInfo> {
+        let dir = dunce::canonicalize(path)?;
+        let folder = dir
+            .file_name()
+            .map(|n| n.to_string_lossy().into_owned())
+            .filter(|f| !f.starts_with(['.', '_']) && dir.parent() == Some(self.root.as_path()))
+            .ok_or_else(|| VaultError::NotChestFolder(self.root.display().to_string()))?;
+        let info = self.chest_info(&folder)?;
+        if info.is_chest {
+            Ok(info)
+        } else {
+            self.make_chest(&folder)
+        }
     }
 
     fn write_chest_toml(&self, folder: &str, format: NoteFormat) -> Result<ChestInfo> {
@@ -670,6 +715,60 @@ mod tests {
         assert_eq!(chests[0].folder, "Notes");
         assert_eq!(v.notes_in("Notes").unwrap(), ["Notes/Welcome.typ"]);
         assert!(v.root().join("_shared/amber.typ").is_file());
+    }
+
+    #[test]
+    fn chests_rename_with_their_folder() {
+        let (_d, v) = vault();
+        let info = v.rename_chest("Notes", "Journal").unwrap();
+        assert_eq!(
+            (info.folder.as_str(), info.name.as_str()),
+            ("Journal", "Journal")
+        );
+        assert!(!v.root().join("Notes").exists());
+        assert!(v.root().join("Journal/Welcome.typ").is_file());
+        // Same name: only chest.toml changes (e.g. after a hand-edited name).
+        assert_eq!(
+            v.rename_chest("Journal", "Journal").unwrap().name,
+            "Journal"
+        );
+        v.create_chest("Work", NoteFormat::Typst).unwrap();
+        assert!(matches!(
+            v.rename_chest("Work", "Journal"),
+            Err(VaultError::Exists(_))
+        ));
+        for bad in ["_shared", ".x", "a/b", ""] {
+            assert!(v.rename_chest("Work", bad).is_err(), "{bad}");
+        }
+        fs::create_dir(v.root().join("plain")).unwrap();
+        assert!(v.rename_chest("plain", "Plain").is_err());
+        assert!(v.delete_chest("plain").is_err());
+    }
+
+    #[test]
+    fn picked_folders_open_as_chests() {
+        let (d, v) = vault();
+        fs::create_dir_all(v.root().join("drafts/inner")).unwrap();
+        let made = v.folder_as_chest(&v.root().join("drafts")).unwrap();
+        assert!(made.is_chest && v.root().join("drafts/chest.toml").is_file());
+        // Already a chest: opened as is.
+        assert_eq!(
+            v.folder_as_chest(&v.root().join("Notes")).unwrap().folder,
+            "Notes"
+        );
+        let outside = d.path().join("elsewhere");
+        fs::create_dir(&outside).unwrap();
+        for bad in [
+            v.root().join("drafts/inner"),
+            v.root().join("_shared"),
+            v.root().to_path_buf(),
+            outside,
+        ] {
+            assert!(
+                matches!(v.folder_as_chest(&bad), Err(VaultError::NotChestFolder(_))),
+                "{bad:?}"
+            );
+        }
     }
 
     #[test]

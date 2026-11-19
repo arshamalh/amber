@@ -250,6 +250,46 @@ class AppStore {
     await this.openChest(folder);
   }
 
+  /** Renames a chest's folder and name; reopens it if it was open. */
+  async renameChest(folder: string, name: string) {
+    const wasOpen = this.chest?.folder === folder;
+    if (wasOpen) await this.flushSave();
+    const info = await api.renameChest(folder, name);
+    const oldKey = `amber:last-note:${this.vault?.root}:${folder}`;
+    const last = local.get(oldKey);
+    if (last?.startsWith(`${folder}/`)) {
+      local.set(`amber:last-note:${this.vault?.root}:${info.folder}`, info.folder + last.slice(folder.length));
+    }
+    await this.refreshChests();
+    if (wasOpen) await this.openChest(info.folder);
+  }
+
+  /** Moves a chest to the trash. If it was open, opens another one. */
+  async deleteChest(folder: string) {
+    const wasOpen = this.chest?.folder === folder;
+    if (wasOpen) {
+      await this.flushSave();
+      this.closeChest(); // nothing may save into the folder while it goes
+    }
+    try {
+      await api.deleteChest(folder);
+    } catch (e) {
+      if (wasOpen) await this.openChest(folder);
+      throw e;
+    }
+    await this.refreshChests();
+    const next = this.vault?.chests.find((c) => c.isChest);
+    if (wasOpen && next) await this.openChest(next.folder);
+  }
+
+  /** Picks a first-level vault folder and opens it as a chest. */
+  async openFolderAsChest() {
+    const info = await api.pickChestFolder();
+    if (!info) return;
+    await this.refreshChests();
+    await this.openChest(info.folder);
+  }
+
   async updateChest(update: api.ChestUpdate) {
     if (!this.chest) return;
     this.chest = await api.updateChest(this.chest.folder, update);

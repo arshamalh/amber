@@ -170,6 +170,12 @@ The phases have no dates on purpose. Pass each gate before starting the next pha
 - **Markdown-in-Typst:** embedding a `.md` file inside a Typst note through a package such as cmarker.
 - **Links between chests:** an opt-in `cross_chest` setting in `chest.toml`.
 
+**To do.** Wanted, not yet scheduled in a phase:
+
+- [ ] **Theme switcher:** light, dark and more themes. Keep the current theme as the default.
+- [ ] **Right-to-left support:** RTL text (Persian, Arabic, Hebrew) in the editor, writing view, file tree and PDF export, including mixed RTL and LTR lines.
+- [ ] **Google Drive and Dropbox:** connect a vault to a cloud folder from inside Amber. A vault inside an already-synced folder works today; this is about connecting without a desktop sync client.
+
 ## Decisions
 
 All decisions below are made.

@@ -43,6 +43,7 @@
       parent = "";
       gitInit = false;
     }
+    if (d.kind === "delete-chest") value = "";
     if (d.kind === "new-chest") {
       value = "";
       format = "typst";
@@ -323,6 +324,29 @@
         </div>
       </form>
     </Modal>
+  {:else if d.kind === "delete-chest"}
+    <Modal title="Delete chest" onclose={() => ui.close()}>
+      <form
+        onsubmit={(e) => {
+          e.preventDefault();
+          if (value === d.name) void run(() => app.deleteChest(d.folder));
+        }}
+      >
+        <p>
+          This moves the folder <strong>{d.folder}</strong> and every note in it to the Trash.
+          You can restore it from there.
+        </p>
+        <label>
+          <span>To confirm, type <strong class="confirm-name">{d.name}</strong> below</span>
+          <input bind:value use:focusSelect={false} spellcheck="false" autocomplete="off" />
+        </label>
+        {#if error}<p class="error">{error}</p>{/if}
+        <div class="actions">
+          <button type="button" onclick={() => ui.close()}>Cancel</button>
+          <button class="primary danger" disabled={working || value !== d.name}>Delete this chest</button>
+        </div>
+      </form>
+    </Modal>
   {:else if d.kind === "create-vault"}
     <Modal title="Create a vault" onclose={() => ui.close()}>
       <form
@@ -522,6 +546,10 @@
     letter-spacing: 0.04em;
     color: var(--accent);
     margin-left: 6px;
+  }
+  .confirm-name {
+    color: var(--fg);
+    user-select: all;
   }
   button.danger {
     background: var(--bad);

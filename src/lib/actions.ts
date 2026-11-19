@@ -92,6 +92,26 @@ export function newChest() {
   ui.open({ kind: "new-chest" });
 }
 
+export function renameChest(folder: string, name: string) {
+  ui.open({
+    kind: "prompt",
+    title: "Rename chest",
+    label: "Name (also the folder name)",
+    value: name,
+    submit: "Rename",
+    onsubmit: (value) => app.renameChest(folder, value),
+  });
+}
+
+export function deleteChest(folder: string, name: string) {
+  ui.open({ kind: "delete-chest", folder, name });
+}
+
+export function openFolderAsChest() {
+  if (!app.vault) return;
+  void app.openFolderAsChest().catch(app.fail);
+}
+
 export function openVault() {
   void api.pickFolder("Open a vault").then((p) => {
     if (p) void app.openVault(p);
@@ -119,6 +139,9 @@ export const commands: Command[] = [
   { id: "note.reveal", title: "Show note in file manager", when: () => !!app.note, run: () => void api.revealVaultPath(app.note!.path).catch(app.fail) },
   { id: "chest.switch", title: "Switch chest…", shortcut: `${mod}⇧O`, when: () => !!app.vault?.initialized, run: () => (ui.palette = "chests") },
   { id: "chest.new", title: "New chest…", when: () => !!app.vault?.initialized, run: newChest },
+  { id: "chest.rename", title: "Rename chest…", when: () => !!app.chest, run: () => app.chest && renameChest(app.chest.folder, app.chest.name) },
+  { id: "chest.delete", title: "Delete chest…", when: () => !!app.chest, run: () => app.chest && deleteChest(app.chest.folder, app.chest.name) },
+  { id: "chest.folder", title: "Open folder as chest…", when: () => !!app.vault?.initialized, run: openFolderAsChest },
   { id: "chest.settings", title: "Chest settings…", when: () => !!app.chest, run: () => ui.open({ kind: "chest-settings" }) },
   { id: "view.sidebar", title: "Toggle sidebar", shortcut: `${mod}\\`, run: () => (ui.sidebarOpen = !ui.sidebarOpen) },
   {

@@ -9,6 +9,8 @@
     label: string;
     detail?: string;
     run: () => void;
+    /** Small icon buttons at the end of the row. */
+    tools?: { icon: "edit" | "trash"; title: string; run: () => void }[];
   }
 
   let query = $state("");
@@ -56,8 +58,15 @@
         label: c.name,
         detail: c.isChest ? (c.folder === app.chest?.folder ? "open" : undefined) : "make it a chest",
         run: () => void (c.isChest ? app.openChest(c.folder) : app.makeChest(c.folder).catch(app.fail)),
+        tools: c.isChest
+          ? [
+              { icon: "edit", title: "Rename chest", run: () => actions.renameChest(c.folder, c.name) },
+              { icon: "trash", title: "Delete chest", run: () => actions.deleteChest(c.folder, c.name) },
+            ]
+          : undefined,
       }));
       pool.push({ key: "+new", label: "New chest…", run: actions.newChest });
+      pool.push({ key: "+folder", label: "Open folder as chest…", run: actions.openFolderAsChest });
     } else {
       const chest = app.chest?.folder ?? "";
       pool = app.notes.map((n) => {
@@ -136,11 +145,29 @@
       <input bind:this={input} bind:value={query} {placeholder} {onkeydown} spellcheck="false" />
       <ul bind:this={list}>
         {#each items as it, i (it.key)}
-          <li>
-            <button class:active={i === active} onmousemove={() => (active = i)} onclick={() => choose(it)}>
+          <li class:active={i === active} onmousemove={() => (active = i)}>
+            <button class="row" onclick={() => choose(it)}>
               <span class="label">{it.label}</span>
               {#if it.detail}<span class="detail">{it.detail}</span>{/if}
             </button>
+            {#each it.tools ?? [] as t (t.icon)}
+              <button
+                class="tool"
+                class:danger={t.icon === "trash"}
+                title={t.title}
+                aria-label={t.title}
+                onclick={() => {
+                  ui.palette = null;
+                  t.run();
+                }}
+              >
+                {#if t.icon === "edit"}
+                  <svg viewBox="0 0 16 16" aria-hidden="true"><path d="M11.2 2.3a1.5 1.5 0 0 1 2.1 0l.4.4a1.5 1.5 0 0 1 0 2.1L6 12.5l-3 .8.8-3z" /></svg>
+                {:else}
+                  <svg viewBox="0 0 16 16" aria-hidden="true"><path d="M2.5 4h11M6 4V2.5h4V4M4 4l.7 9.5h6.6L12 4M6.8 6.5v4.5M9.2 6.5v4.5" /></svg>
+                {/if}
+              </button>
+            {/each}
           </li>
         {:else}
           <li class="empty">Nothing found</li>
@@ -186,19 +213,59 @@
     max-height: 50vh;
     overflow: auto;
   }
-  button {
+  li {
+    display: flex;
+    align-items: center;
+    border-radius: 6px;
+  }
+  li.active {
+    background: var(--accent-bg);
+  }
+  .row {
     display: flex;
     justify-content: space-between;
     gap: 12px;
-    width: 100%;
+    flex: 1;
+    min-width: 0;
     border: none;
     background: none;
     text-align: left;
     padding: 7px 10px;
     border-radius: 6px;
   }
-  button.active {
-    background: var(--accent-bg);
+  /* Shown on the hovered or selected row only. */
+  .tool {
+    display: grid;
+    place-items: center;
+    flex: none;
+    width: 28px;
+    height: 28px;
+    margin-right: 2px;
+    padding: 0;
+    border: none;
+    background: none;
+    border-radius: 6px;
+    color: var(--muted);
+    visibility: hidden;
+  }
+  li.active .tool {
+    visibility: visible;
+  }
+  .tool:hover {
+    background: var(--hover);
+    color: var(--fg);
+  }
+  .tool.danger:hover {
+    color: var(--bad);
+  }
+  .tool svg {
+    width: 15px;
+    height: 15px;
+    fill: none;
+    stroke: currentColor;
+    stroke-width: 1.3;
+    stroke-linecap: round;
+    stroke-linejoin: round;
   }
   .label {
     overflow: hidden;

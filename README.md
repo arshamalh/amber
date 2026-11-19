@@ -54,8 +54,6 @@ Obsidian is excellent, but large vaults get messy: everything shares one tree, o
 | Git | Every vault must be a git repository | Git is optional per vault |
 | Interface | Sidebar always open | Chest picker and tree fold into a command palette |
 
-If you live in Markdown and like type-based organization, Tolaria is a great choice. Amber is for people who think in projects and want real typesetting.
-
 ## Planned stack
 
 Tauri 2 · Rust · Svelte 5 + TypeScript · CodeMirror 6 · Tinymist · Tantivy + SQLite · TOML config
