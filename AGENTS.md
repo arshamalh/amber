@@ -45,7 +45,8 @@ Other: `src-tauri/tinymist.version` (pinned Tinymist; `npm run fetch-tinymist` i
 - `npm install && npm run fetch-tinymist` once, then `npm run tauri dev`.
 - `AMBER_VAULT=/path/to/vault npm run tauri dev` opens a vault on launch (a built binary also takes the path as its first argument).
 - Checks: `npm run check`, and in `src-tauri/`: `cargo fmt --check`, `cargo clippy --all-targets -- -D warnings`, `cargo test`.
-- Releases: `make release vX.Y.Z` (on a clean, up-to-date `main`) sets the version in all files, commits, tags and pushes. The tag runs `.github/workflows/release.yml`, which builds a draft GitHub release. CI on `main` and PRs runs checks only.
+- Releases: `make release vX.Y.Z` (on a clean, up-to-date `main`) sets the version in all files, commits, tags and pushes. The tag runs `.github/workflows/release.yml`, which builds a draft GitHub release with signed update files; publishing the draft delivers it to installed copies through the built-in updater (ADR 0009, `docs/RELEASING.md`). CI on `main` and PRs runs checks only.
+- Distribution is free by design: macOS builds are ad-hoc signed (no paid Developer ID), updates come from GitHub Releases. Never commit `~/.tauri/amber.key`.
 
 ## Stack (decided)
 

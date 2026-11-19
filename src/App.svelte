@@ -154,6 +154,11 @@
       <span class="note-title" title={app.note?.path}>{noteTitle ?? ""}</span>
       <span class="spacer"></span>
       {#if app.busy}<span class="busy">{app.busy}</span>{/if}
+      {#if app.updateStatus === "available" && app.update && app.info?.canSelfUpdate}
+        <button class="ghost update" onclick={() => void app.installUpdate()} title="Download, install and restart">
+          Update to {app.update.version}
+        </button>
+      {/if}
       {#if app.chest}
         <button class="ghost" onclick={() => (ui.palette = "notes")} title="Go to note (⌘P)">Go to…</button>
         <button class="ghost" onclick={() => ui.showSearch()} title="Search (⌘⇧F)">Search</button>
@@ -411,6 +416,9 @@
     background: var(--bg);
     color: var(--fg);
     box-shadow: 0 1px 2px rgb(0 0 0 / 0.12);
+  }
+  .update {
+    color: var(--accent);
   }
   .toggle.on {
     color: var(--accent);

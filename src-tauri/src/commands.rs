@@ -34,25 +34,37 @@ pub struct AppInfo {
     git_available: bool,
     recent_vaults: Vec<String>,
     reopen_last_vault: bool,
+    auto_check_updates: bool,
+    /// This build's version, e.g. "0.0.6".
+    app_version: String,
+    /// False in development builds, which must not replace themselves.
+    can_self_update: bool,
     /// A vault to open on launch: the first CLI argument, else `$AMBER_VAULT`.
     startup_vault: Option<String>,
     tinymist_version: String,
 }
 
 #[tauri::command]
-pub async fn app_info(state: State<'_, AppState>) -> CmdResult<AppInfo> {
+pub async fn app_info(app: AppHandle, state: State<'_, AppState>) -> CmdResult<AppInfo> {
     let startup_vault = std::env::args()
         .nth(1)
         .or_else(|| std::env::var("AMBER_VAULT").ok())
         .filter(|p| Path::new(p).is_dir());
-    let (recent_vaults, reopen_last_vault) = {
+    let (recent_vaults, reopen_last_vault, auto_check_updates) = {
         let s = state.settings.lock().unwrap();
-        (s.recent_vaults.clone(), s.reopen_last_vault)
+        (
+            s.recent_vaults.clone(),
+            s.reopen_last_vault,
+            s.auto_check_updates,
+        )
     };
     Ok(AppInfo {
         git_available: git::available().await,
         recent_vaults,
         reopen_last_vault,
+        auto_check_updates,
+        app_version: app.package_info().version.to_string(),
+        can_self_update: !cfg!(debug_assertions),
         startup_vault,
         tinymist_version: typst::PINNED_VERSION.trim().to_owned(),
     })
@@ -194,6 +206,72 @@ pub async fn clone_vault(url: String, parent: String) -> CmdResult<String> {
 #[tauri::command]
 pub fn set_reopen_last_vault(enabled: bool, state: State<'_, AppState>) {
     state.with_settings(|s| s.reopen_last_vault = enabled);
+}
+
+#[tauri::command]
+pub fn set_auto_check_updates(enabled: bool, state: State<'_, AppState>) {
+    state.with_settings(|s| s.auto_check_updates = enabled);
+}
+
+// ---- updates --------------------------------------------------------------
+
+#[derive(Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct UpdateInfo {
+    version: String,
+    current_version: String,
+    notes: Option<String>,
+}
+
+/// Asks GitHub Releases (`latest.json`) whether a newer Amber exists.
+#[tauri::command]
+pub async fn check_update(app: AppHandle) -> CmdResult<Option<UpdateInfo>> {
+    use tauri_plugin_updater::UpdaterExt;
+    let found = app.updater().map_err(err)?.check().await.map_err(err)?;
+    let info = found.as_ref().map(|u| UpdateInfo {
+        version: u.version.clone(),
+        current_version: u.current_version.clone(),
+        notes: u.body.clone(),
+    });
+    *app.state::<AppState>().pending_update.lock().unwrap() = found;
+    Ok(info)
+}
+
+/// Download progress for the UI.
+#[derive(Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct UpdateProgress {
+    downloaded: u64,
+    total: Option<u64>,
+}
+
+/// Downloads the update found by `check_update`, verifies its signature
+/// against the public key built into Amber, installs it and restarts.
+/// Amber downloads it itself, so macOS does not quarantine it again.
+#[tauri::command]
+pub async fn install_update(app: AppHandle, progress: Channel<UpdateProgress>) -> CmdResult<()> {
+    if cfg!(debug_assertions) {
+        return Err("Updates install only in released builds of Amber.".into());
+    }
+    let update = app
+        .state::<AppState>()
+        .pending_update
+        .lock()
+        .unwrap()
+        .take()
+        .ok_or("No update to install. Check for updates first.")?;
+    let mut downloaded = 0u64;
+    update
+        .download_and_install(
+            |chunk, total| {
+                downloaded += chunk as u64;
+                let _ = progress.send(UpdateProgress { downloaded, total });
+            },
+            || {},
+        )
+        .await
+        .map_err(err)?;
+    app.restart();
 }
 
 #[tauri::command]

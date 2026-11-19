@@ -67,6 +67,16 @@ jobs:
           workspaces: src-tauri
           key: ${{ matrix.target }}
 
+      - name: Update-signing key is configured
+        shell: bash
+        env:
+          KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
+        run: |
+          if [ -z "$KEY" ]; then
+            echo "::error::Missing secret TAURI_SIGNING_PRIVATE_KEY. See docs/RELEASING.md."
+            exit 1
+          fi
+
       - run: npm ci
       - name: Fetch Tinymist sidecar
         run: node scripts/fetch-tinymist.mjs ${{ matrix.target }}
@@ -74,13 +84,23 @@ jobs:
       - uses: tauri-apps/tauri-action@v0
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          # Signs the update files so installed copies of Amber accept them
+          # (free; unrelated to Apple or Windows code signing).
+          TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
+          TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
         with:
           tagName: ${{ github.ref_name }}
           releaseName: Amber ${{ github.ref_name }}
           releaseBody: |
-            Early test build (Phase 0 spike). Not signed yet:
-            - macOS: if it says the app is damaged, run `xattr -dr com.apple.quarantine /Applications/Amber.app`.
-            - Windows: SmartScreen may warn; choose "More info" → "Run anyway".
+            **First install only.** Amber is not signed by Apple or Microsoft yet, so your system asks once:
+            - **macOS:** open Amber; when macOS says it can't verify it, go to **System Settings → Privacy & Security**, scroll down and click **Open Anyway**.
+            - **Windows:** if SmartScreen appears, click **More info → Run anyway**.
+
+            After that, Amber updates itself from inside the app (Settings → Updates).
+          # Review the draft, then publish it. Published releases reach
+          # installed copies through latest.json (the updater's feed).
           releaseDraft: true
-          prerelease: true
-          args: --target ${{ matrix.target }}
+          prerelease: false
+          includeUpdaterJson: true
+          updaterJsonPreferNsis: true
+          args: --target ${{ matrix.target }} --config src-tauri/tauri.updater.conf.json

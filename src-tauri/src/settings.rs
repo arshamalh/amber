@@ -18,6 +18,8 @@ pub struct Settings {
     pub last_chest: BTreeMap<String, String>,
     /// Open the most recent vault on launch instead of the start screen.
     pub reopen_last_vault: bool,
+    /// Look for a new Amber release on GitHub at startup.
+    pub auto_check_updates: bool,
 }
 
 impl Default for Settings {
@@ -26,6 +28,7 @@ impl Default for Settings {
             recent_vaults: Vec::new(),
             last_chest: BTreeMap::new(),
             reopen_last_vault: true,
+            auto_check_updates: true,
         }
     }
 }
@@ -88,6 +91,7 @@ mod tests {
         s.save(&p).unwrap();
         assert_eq!(Settings::load(&p).last_chest["/a"], "Notes");
         assert!(Settings::load(&p).reopen_last_vault, "defaults on");
+        assert!(Settings::load(&p).auto_check_updates, "defaults on");
         fs::write(&p, "{not json").unwrap();
         assert!(Settings::load(&p).recent_vaults.is_empty());
     }

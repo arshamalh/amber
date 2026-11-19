@@ -30,7 +30,9 @@
         "connect-src": "ipc: http://ipc.localhost",
         "frame-src": "http://127.0.0.1:*"
       },
-      "dangerousDisableAssetCspModification": ["style-src"]
+      "dangerousDisableAssetCspModification": [
+        "style-src"
+      ]
     }
   },
   "bundle": {
@@ -38,13 +40,30 @@
     "targets": "all",
     "category": "Productivity",
     "shortDescription": "Local-first notes on Typst",
-    "externalBin": ["binaries/tinymist"],
+    "externalBin": [
+      "binaries/tinymist"
+    ],
     "icon": [
       "icons/32x32.png",
       "icons/128x128.png",
       "icons/128x128@2x.png",
       "icons/icon.icns",
       "icons/icon.ico"
-    ]
+    ],
+    "macOS": {
+      "signingIdentity": "-"
+    },
+    "createUpdaterArtifacts": false
+  },
+  "plugins": {
+    "updater": {
+      "pubkey": "dW50cnVzdGVkIGNvbW1lbnQ6IG1pbmlzaWduIHB1YmxpYyBrZXk6IDE0RUE0NDQwMkM0Q0YwNTYKUldSVzhFd3NRRVRxRkRreVBUaXZ6RkdBVlRFUFRHOFViU0REc0NpeHg0Z2hEL2FnQ29OS1U2RGQK",
+      "endpoints": [
+        "https://github.com/arshamalh/amber/releases/latest/download/latest.json"
+      ],
+      "windows": {
+        "installMode": "passive"
+      }
+    }
   }
 }

@@ -173,6 +173,36 @@
           <p class="hint">Git: {app.info?.gitAvailable ? "found" : "not found (create and clone with git are off)"}</p>
         </section>
         <section>
+          <h3>Updates</h3>
+          <p class="value">Amber {app.info?.appVersion}</p>
+          <label class="check">
+            <input
+              type="checkbox"
+              checked={app.info?.autoCheckUpdates ?? true}
+              onchange={(e) => void app.setAutoCheckUpdates(e.currentTarget.checked).catch(app.fail)}
+            />
+            Check for updates when Amber starts
+          </label>
+          <div class="buttons">
+            {#if app.updateStatus === "available" && app.update}
+              <button class="primary" onclick={() => void app.installUpdate()} disabled={!app.info?.canSelfUpdate}>
+                Install {app.update.version} and restart
+              </button>
+            {:else}
+              <button onclick={() => void app.checkForUpdate(true)} disabled={app.updateStatus === "checking" || app.updateStatus === "installing"}>
+                {app.updateStatus === "checking" ? "Checking…" : "Check now"}
+              </button>
+            {/if}
+          </div>
+          <p class="hint">
+            {#if app.updateStatus === "none"}You have the latest version.
+            {:else if app.updateStatus === "error"}Could not check: {app.updateError}
+            {:else if app.updateStatus === "installing"}Installing… Amber will restart.
+            {:else if !app.info?.canSelfUpdate}This is a development build; updates install only in released builds.
+            {:else}Updates come from the project's GitHub releases and are verified before installing.{/if}
+          </p>
+        </section>
+        <section>
           <h3>Keyboard</h3>
           <dl class="keys">
             <dt>⌘/Ctrl P</dt><dd>Go to note</dd>

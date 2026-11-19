@@ -36,6 +36,8 @@ pub struct AppState {
     render_lock: tokio::sync::Mutex<()>,
     settings: Mutex<Settings>,
     settings_path: PathBuf,
+    /// An update found by `check_update`, waiting for `install_update`.
+    pending_update: Mutex<Option<tauri_plugin_updater::Update>>,
 }
 
 impl AppState {
@@ -49,6 +51,7 @@ impl AppState {
             render_lock: tokio::sync::Mutex::default(),
             settings: Mutex::new(Settings::load(&settings_path)),
             settings_path,
+            pending_update: Mutex::default(),
         }
     }
 
@@ -110,6 +113,7 @@ pub fn run() {
     let app = tauri::Builder::default()
         .plugin(tauri_plugin_dialog::init())
         .plugin(tauri_plugin_opener::init())
+        .plugin(tauri_plugin_updater::Builder::new().build())
         .setup(|app| {
             let dir = app.path().app_config_dir()?;
             app.manage(AppState::new(settings::path(dir)));
@@ -127,6 +131,9 @@ pub fn run() {
             commands::clone_vault,
             commands::forget_vault,
             commands::set_reopen_last_vault,
+            commands::set_auto_check_updates,
+            commands::check_update,
+            commands::install_update,
             commands::list_chests,
             commands::create_chest,
             commands::make_chest,

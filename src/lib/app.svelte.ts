@@ -1,6 +1,7 @@
 // App state and actions. Components read this and call its methods; only
 // this module talks to the backend for vault/chest/note flows.
 import { listen } from "@tauri-apps/api/event";
+import { Channel } from "@tauri-apps/api/core";
 import * as api from "./backend";
 import type {
   AppInfo, ChestInfo, NoteFormat, NoteSummary, OpenedNote, TreeEntry, VaultView,
@@ -90,8 +91,67 @@ class AppStore {
       const recent = this.info.reopenLastVault ? this.info.recentVaults[0] : undefined;
       const first = this.info.startupVault ?? recent;
       if (first) await this.openVault(first, { quiet: !this.info.startupVault });
+      // A quiet update check, once the app is up.
+      if (this.info.autoCheckUpdates && this.info.canSelfUpdate) {
+        setTimeout(() => void this.checkForUpdate(), 4000);
+      }
     } finally {
       this.booting = false;
+    }
+  }
+
+  // ---- updates ---------------------------------------------------------
+
+  update = $state<api.UpdateInfo | null>(null);
+  updateStatus = $state<"idle" | "checking" | "none" | "available" | "installing" | "error">("idle");
+  updateError = $state<string | null>(null);
+
+  async setAutoCheckUpdates(enabled: boolean) {
+    await api.setAutoCheckUpdates(enabled);
+    if (this.info) this.info.autoCheckUpdates = enabled;
+  }
+
+  /** Looks for a newer release; quietly unless `loud` (the Settings button). */
+  async checkForUpdate(loud = false) {
+    this.updateStatus = "checking";
+    this.updateError = null;
+    try {
+      this.update = await api.checkUpdate();
+      this.updateStatus = this.update ? "available" : "none";
+      if (this.update && !loud) {
+        this.toast(`Amber ${this.update.version} is available.`, "info", {
+          label: "Update",
+          run: () => void this.installUpdate(),
+        });
+      }
+    } catch (e) {
+      this.updateStatus = "error";
+      this.updateError = e instanceof Error ? e.message : String(e);
+      if (loud) this.fail(e);
+    }
+  }
+
+  /** Saves, downloads the update (with progress) and restarts into it. */
+  async installUpdate() {
+    if (!this.update) return;
+    if (!this.info?.canSelfUpdate) {
+      this.toast("Updates install only in released builds of Amber.");
+      return;
+    }
+    await this.flushSave();
+    this.updateStatus = "installing";
+    const progress = new Channel<api.UpdateProgress>();
+    progress.onmessage = ({ downloaded, total }) => {
+      this.busy = total
+        ? `Downloading update… ${Math.round((downloaded / total) * 100)}%`
+        : `Downloading update… ${(downloaded / 1e6).toFixed(1)} MB`;
+    };
+    try {
+      await api.installUpdate(progress); // restarts Amber on success
+    } catch (e) {
+      this.updateStatus = "error";
+      this.busy = null;
+      this.fail(e);
     }
   }
 

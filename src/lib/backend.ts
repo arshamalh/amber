@@ -1,6 +1,6 @@
 // Typed wrappers around the Rust core's commands. The UI reaches files only
 // through these. Paths are vault-relative with `/` separators.
-import { invoke } from "@tauri-apps/api/core";
+import { Channel, invoke } from "@tauri-apps/api/core";
 
 export type NoteFormat = "typst" | "markdown";
 
@@ -8,6 +8,11 @@ export interface AppInfo {
   gitAvailable: boolean;
   recentVaults: string[];
   reopenLastVault: boolean;
+  autoCheckUpdates: boolean;
+  /** This build's version, e.g. "0.0.6". */
+  appVersion: string;
+  /** False in development builds (they must not replace themselves). */
+  canSelfUpdate: boolean;
   startupVault: string | null;
   tinymistVersion: string;
 }
@@ -108,6 +113,26 @@ export const createVault = (parent: string, name: string, git: boolean) =>
 export const cloneVault = (url: string, parent: string) =>
   invoke<string>("clone_vault", { url, parent });
 export const forgetVault = (path: string) => invoke<void>("forget_vault", { path });
+export const setAutoCheckUpdates = (enabled: boolean) =>
+  invoke<void>("set_auto_check_updates", { enabled });
+
+export interface UpdateInfo {
+  version: string;
+  currentVersion: string;
+  notes: string | null;
+}
+
+export interface UpdateProgress {
+  downloaded: number;
+  total: number | null;
+}
+
+/** Asks GitHub Releases whether a newer Amber exists. */
+export const checkUpdate = () => invoke<UpdateInfo | null>("check_update");
+/** Downloads, verifies and installs the found update, then restarts Amber. */
+export const installUpdate = (progress: Channel<UpdateProgress>) =>
+  invoke<void>("install_update", { progress });
+
 export const setReopenLastVault = (enabled: boolean) =>
   invoke<void>("set_reopen_last_vault", { enabled });
 
