@@ -2,13 +2,31 @@
 
 ## Every release
 
-```sh
-make release vX.Y.Z
+1. Write the notes in `docs/releases/vX.Y.Z.md` (the format is below).
+2. Run:
+
+   ```sh
+   make release vX.Y.Z
+   ```
+
+## Release notes
+
+`docs/releases/vX.Y.Z.md` is the release's description on GitHub and the notes the in-app updater receives. Keep it short: an optional one-line summary, then **one line per change, each starting with an emoji**, written for users (what they can now do), not as commit messages. `docs/releases/_footer.md` (first-install steps) is appended automatically.
+
+```markdown
+Writing feels like writing now. ✍️
+
+- ✨ Notes open in a **writing view**: markup hides until you click into it
+- 🧮 Maths and figures show as real Typst output while you write
+- ⌨️ Type `/` for headings, tables, images, callouts and more
+- 🐛 Fixed links not updating after renaming a folder
 ```
 
-This bumps the version everywhere, commits, tags and pushes. The tag runs `.github/workflows/release.yml`, which builds installers for Linux, macOS (Apple Silicon and Intel) and Windows into a **draft** GitHub release, together with signed update files and `latest.json`.
+Common emoji: ✨ new, ⚡️ faster, 🎨 look, 🐛 fix, 🔒 safety, 📄 export, 🔗 links, 🔍 search, 🗂️ chests and files, 🔄 updates, 🧮 maths.
 
-Then on GitHub, under **Releases**: review the draft and click **Publish release**, leaving "Set as the latest release" ticked. Publishing is what delivers the update. Installed copies of Amber read
+This checks that the notes exist, bumps the version everywhere, commits (with the notes), tags and pushes. The tag runs `.github/workflows/release.yml`, which builds installers for Linux, macOS (Apple Silicon and Intel) and Windows, together with signed update files and `latest.json`. They collect in a draft release that is **published automatically once all four platforms have built**. If any build fails, the release stays a draft: fix the problem and release a new version, or publish the draft by hand if the failure doesn't matter.
+
+Publishing is what delivers the update. Installed copies of Amber read
 `https://github.com/arshamalh/amber/releases/latest/download/latest.json`, and GitHub's `latest` skips drafts and pre-releases.
 
 ## The update-signing key (one-time setup)

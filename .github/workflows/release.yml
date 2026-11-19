@@ -1,7 +1,8 @@
 name: Release
 
-# Push a tag like `v0.0.1` to build installers for every platform and attach
-# them to a draft GitHub release. Review the draft, then publish it by hand.
+# Push a tag like `v0.0.1` to build installers for every platform. They are
+# collected in a draft GitHub release, which is published automatically once
+# every platform has built. If any build fails, it stays a draft.
 # The tag must match "version" in src-tauri/tauri.conf.json.
 
 on:
@@ -77,6 +78,23 @@ jobs:
             exit 1
           fi
 
+      - name: Release notes
+        id: notes
+        shell: bash
+        run: |
+          file="docs/releases/${GITHUB_REF_NAME}.md"
+          if [ ! -f "$file" ]; then
+            echo "::error::Missing $file. See docs/RELEASING.md."
+            exit 1
+          fi
+          {
+            echo "body<<AMBER_NOTES_EOF"
+            cat "$file"
+            echo
+            cat docs/releases/_footer.md
+            echo "AMBER_NOTES_EOF"
+          } >> "$GITHUB_OUTPUT"
+
       - run: npm ci
       - name: Fetch Tinymist sidecar
         run: node scripts/fetch-tinymist.mjs ${{ matrix.target }}
@@ -91,16 +109,22 @@ jobs:
         with:
           tagName: ${{ github.ref_name }}
           releaseName: Amber ${{ github.ref_name }}
-          releaseBody: |
-            **First install only.** Amber is not signed by Apple or Microsoft yet, so your system asks once:
-            - **macOS:** open Amber; when macOS says it can't verify it, go to **System Settings → Privacy & Security**, scroll down and click **Open Anyway**.
-            - **Windows:** if SmartScreen appears, click **More info → Run anyway**.
-
-            After that, Amber updates itself from inside the app (Settings → Updates).
-          # Review the draft, then publish it. Published releases reach
-          # installed copies through latest.json (the updater's feed).
+          # docs/releases/<tag>.md + the install footer; also shown by the updater.
+          releaseBody: ${{ steps.notes.outputs.body }}
+          # A draft while the platforms build; the publish job below makes it
+          # public (and reachable through latest.json) when all have succeeded.
           releaseDraft: true
           prerelease: false
           includeUpdaterJson: true
           updaterJsonPreferNsis: true
           args: --target ${{ matrix.target }} --config src-tauri/tauri.updater.conf.json
+
+  publish:
+    name: Publish release
+    needs: release # waits for every platform; skipped if any failed
+    runs-on: ubuntu-latest
+    steps:
+      - name: Publish the draft as the latest release
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: gh release edit "${{ github.ref_name }}" --repo "${{ github.repository }}" --draft=false --latest

@@ -1,12 +1,13 @@
 #!/usr/bin/env node
 // Cuts a release: sets the version everywhere, commits, tags, and pushes.
-// The tag push starts .github/workflows/release.yml, which builds the
-// installers into a draft GitHub release.
+// Needs docs/releases/<tag>.md (the release notes) first. The tag push starts
+// .github/workflows/release.yml, which builds every platform and publishes
+// the release when all succeed.
 //
 // Usage: make release v0.0.2   (or: node scripts/release.mjs v0.0.2)
 
 import { execFileSync } from "node:child_process";
-import { readFileSync, writeFileSync } from "node:fs";
+import { existsSync, readFileSync, writeFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 
@@ -29,10 +30,20 @@ const match = /^v(\d+\.\d+\.\d+(?:-[0-9A-Za-z.-]+)?)$/.exec(tag);
 if (!match) fail(`"${tag}" is not a version like v0.0.2 or v0.1.0-rc.1`);
 const version = match[1];
 
-// Preconditions: on main, clean, up to date, tag unused.
+// Release notes are written per version before releasing.
+const notes = `docs/releases/${tag}.md`;
+if (!existsSync(join(root, notes))) {
+  fail(`write the release notes first: ${notes} (see docs/RELEASING.md)`);
+}
+
+// Preconditions: on main, clean (except this version's notes), up to date, tag unused.
 const branch = run("git", ["rev-parse", "--abbrev-ref", "HEAD"]);
 if (branch !== BRANCH) fail(`switch to ${BRANCH} first (on ${branch})`);
-if (run("git", ["status", "--porcelain"])) fail("working tree has uncommitted changes");
+// -uall lists files inside new folders; output lines are "XY path".
+const dirty = run("git", ["status", "--porcelain", "-uall"])
+  .split("\n")
+  .filter((l) => l && /^\S{1,2}\s+(.+)$/.exec(l.trim())?.[1] !== notes);
+if (dirty.length) fail(`working tree has uncommitted changes:\n  ${dirty.join("\n  ")}`);
 run("git", ["fetch", "--quiet", "origin", BRANCH, "--tags"]);
 const [behind] = run("git", ["rev-list", "--count", `HEAD..origin/${BRANCH}`]).split("\n");
 if (behind !== "0") fail(`${BRANCH} is ${behind} commit(s) behind origin; pull first`);
@@ -58,6 +69,7 @@ run("npm", ["version", version, "--no-git-tag-version", "--allow-same-version"],
 });
 
 const files = [
+  notes,
   "package.json",
   "package-lock.json",
   "src-tauri/tauri.conf.json",
@@ -86,4 +98,4 @@ try {
 const repo = run("git", ["remote", "get-url", "origin"])
   .replace(/^git@github\.com:/, "https://github.com/")
   .replace(/\.git$/, "");
-console.log(`\nReleased ${tag}. Builds are running; the draft release appears at:\n  ${repo}/releases`);
+console.log(`\nReleased ${tag}. Builds are running (about 15–20 minutes); the release is published at:\n  ${repo}/releases`);
