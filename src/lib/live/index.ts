@@ -142,6 +142,9 @@ const theme = EditorView.theme({
     lineHeight: "1.7",
   },
   "&.cm-writing .cm-gutters": { display: "none" },
+  // Tinymist diagnostics stay in state but show only in the source view.
+  "&.cm-writing .cm-lintRange": { background: "none" },
+  "&.cm-writing .cm-tooltip-lint": { display: "none" },
   "&.cm-writing .cm-activeLine": { background: "transparent" },
   ".cm-lp-h1": { fontSize: "1.9em", fontWeight: "700", lineHeight: "1.3", paddingTop: "0.5em" },
   ".cm-lp-h2": { fontSize: "1.5em", fontWeight: "700", lineHeight: "1.3", paddingTop: "0.4em" },
