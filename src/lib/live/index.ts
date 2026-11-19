@@ -1,7 +1,7 @@
 // The writing view: Typst or Markdown with markup hidden away from the
 // cursor, maths and function blocks rendered by Typst (ADR 0007).
 // Turning on "Show Typst" removes this extension; the text never changes.
-import { StateEffect, StateField, type EditorState, type Extension } from "@codemirror/state";
+import { EditorSelection, EditorState, StateEffect, StateField, type Extension } from "@codemirror/state";
 import { Decoration, EditorView, ViewPlugin, type DecorationSet, type ViewUpdate } from "@codemirror/view";
 import { syntaxTree } from "@codemirror/language";
 import type { NoteFormat } from "../backend";
@@ -19,6 +19,11 @@ export interface LiveOptions {
 
 interface LiveState {
   decos: DecorationSet;
+  /** Hidden leading lines, which the cursor skips. */
+  prelude: DecorationSet;
+  preludeEnd: number;
+  /** Whether the user has clicked, typed or moved the cursor yet. */
+  active: boolean;
   wanted: Fragment[];
   preamble: string;
   files: string[];
@@ -27,13 +32,17 @@ interface LiveState {
 /** Dispatched when new renders arrive, to redraw widgets. */
 const rendered = StateEffect.define<null>();
 
-function build(state: EditorState, opts: LiveOptions): LiveState {
-  const b = new Builder(state);
+function build(state: EditorState, opts: LiveOptions, active: boolean): LiveState {
+  const b = new Builder(state, active);
   let preamble = "";
   if (opts.format === "typst") preamble = buildTypst(b, { notePath: opts.notePath }).preamble;
   else buildMarkdown(b, opts.notePath);
+  const p = b.prelude;
   return {
     decos: Decoration.set(b.decos, true),
+    prelude: p ? Decoration.set([Decoration.mark({}).range(p.from, p.to)]) : Decoration.none,
+    preludeEnd: p ? p.to : -1,
+    active,
     wanted: b.wanted,
     preamble,
     files: [...b.files],
@@ -42,11 +51,13 @@ function build(state: EditorState, opts: LiveOptions): LiveState {
 
 export function livePreview(opts: LiveOptions): Extension {
   const field = StateField.define<LiveState>({
-    create: (state) => build(state, opts),
+    create: (state) => build(state, opts, false),
     update(value, tr) {
+      const user = ["select", "input", "delete", "move", "undo", "redo"].some((e) => tr.isUserEvent(e));
+      const active = value.active || user;
       const treeChanged = syntaxTree(tr.startState) !== syntaxTree(tr.state);
-      if (tr.docChanged || tr.selection || treeChanged || tr.effects.some((e) => e.is(rendered))) {
-        return build(tr.state, opts);
+      if (tr.docChanged || tr.selection || treeChanged || active !== value.active || tr.effects.some((e) => e.is(rendered))) {
+        return build(tr.state, opts, active);
       }
       return value;
     },
@@ -62,6 +73,18 @@ export function livePreview(opts: LiveOptions): Extension {
           this.view.dispatch({ effects: rendered.of(null) }),
         );
         this.request();
+        // Start the cursor on the first visible line, below hidden setup
+        // lines and after a heading or list marker (which is hidden), so
+        // typing right away can't break the line. Not a user action, so
+        // nothing gets revealed.
+        queueMicrotask(() => {
+          const st = view.state;
+          if (st.selection.main.head !== 0 && st.selection.main.head > st.field(field).preludeEnd) return;
+          const end = st.field(field).preludeEnd;
+          const line = st.doc.lineAt(Math.min(end >= 0 ? end + 1 : 0, st.doc.length));
+          const marker = /^(?:=+|#{1,6}|[-+*]|\d+\.)\s/.exec(line.text)?.[0].length ?? 0;
+          view.dispatch({ selection: { anchor: line.from + marker } });
+        });
       }
       update(u: ViewUpdate) {
         if (u.state.field(field) !== this.last) this.request();
@@ -91,7 +114,25 @@ export function livePreview(opts: LiveOptions): Extension {
     },
   });
 
-  return [field, requester, clicks, EditorView.editorAttributes.of({ class: "cm-writing" }), theme];
+  // The cursor can't enter the hidden setup lines (Source shows them).
+  const atomic = EditorView.atomicRanges.of((view) => view.state.field(field).prelude);
+
+  // Atomic ranges still allow the position *before* hidden lines (0), where
+  // typing would land above `#import`. Keep the cursor, and both ends of a
+  // selection (e.g. Select All), on or below the first visible line.
+  const belowPrelude = EditorState.transactionFilter.of((tr) => {
+    if (!tr.selection) return tr;
+    const end = tr.startState.field(field).preludeEnd;
+    if (end < 0) return tr;
+    const first = tr.changes.mapPos(end, 1) + 1;
+    if (first > tr.newDoc.length) return tr;
+    const sel = tr.selection;
+    if (sel.ranges.every((r) => r.from >= first)) return tr;
+    const clamp = (p: number) => Math.max(p, first);
+    return [tr, { selection: EditorSelection.create(sel.ranges.map((r) => EditorSelection.range(clamp(r.anchor), clamp(r.head))), sel.mainIndex), sequential: true }];
+  });
+
+  return [field, requester, clicks, atomic, belowPrelude, EditorView.editorAttributes.of({ class: "cm-writing" }), theme];
 }
 
 const theme = EditorView.theme({
@@ -141,17 +182,6 @@ const theme = EditorView.theme({
   ".cm-lp-setup-line, .cm-lp-code-src, .cm-lp-math-src": { fontFamily: "var(--mono)", fontSize: "0.88em" },
   ".cm-lp-bullet, .cm-lp-number": { color: "var(--muted)", display: "inline-block", minWidth: "0.9em" },
   ".cm-lp-task": { margin: "0 4px 0 0", verticalAlign: "middle", accentColor: "var(--accent)" },
-  ".cm-lp-chip": {
-    display: "inline-block",
-    margin: "2px 0",
-    padding: "1px 10px",
-    borderRadius: "999px",
-    fontSize: "12px",
-    color: "var(--muted)",
-    background: "var(--hover)",
-    cursor: "pointer",
-    fontFamily: "var(--prose)",
-  },
   ".cm-lp-hr": { borderTop: "1px solid var(--line)", margin: "10px 0" },
   ".cm-lp-render": { cursor: "pointer" },
   ".cm-lp-render img": { verticalAlign: "middle", maxWidth: "100%" },

@@ -118,8 +118,9 @@ jobs:
           # public (and reachable through latest.json) when all have succeeded.
           releaseDraft: true
           prerelease: false
-          includeUpdaterJson: true
-          updaterJsonPreferNsis: true
+          # latest.json is written once by the publish job; parallel jobs
+          # updating it raced (one deleted it while another read it).
+          includeUpdaterJson: false
           args: --target ${{ matrix.target }} --config src-tauri/tauri.updater.conf.json
 
   publish:
@@ -127,8 +128,15 @@ jobs:
     needs: release # waits for every platform; skipped if any failed
     runs-on: ubuntu-latest
     timeout-minutes: 10
+    env:
+      GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
     steps:
+      - uses: actions/checkout@v4
+
+      - name: Write the updater feed (latest.json)
+        run: |
+          node scripts/updater-json.mjs "${{ github.ref_name }}" latest.json
+          gh release upload "${{ github.ref_name }}" latest.json --clobber
+
       - name: Publish the draft as the latest release
-        env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        run: gh release edit "${{ github.ref_name }}" --repo "${{ github.repository }}" --draft=false --latest
+        run: gh release edit "${{ github.ref_name }}" --draft=false --latest

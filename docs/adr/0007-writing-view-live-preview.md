@@ -11,10 +11,10 @@ Amber promises that people who don't know Typst can write styled notes. A source
 - **The text stays the only source of truth.** The default *writing view* is CodeMirror with markup hidden away from the cursor, as Obsidian's live preview does:
   - `= Title` shows as a heading, `*bold*` bold, lists get bullets and numbers;
   - `[[Note|label]]` shows only its label;
-  - leading `#import`/`#set`/`#show`/`#let` lines fold into a "Typst setup" chip;
+  - leading `#import`/`#set`/`#show`/`#let` lines (and Markdown front matter) are hidden; only Source shows them, and the cursor can't enter them (amended 2026-11-19; first shipped as a "Typst setup" chip);
   - maths and `#function(...)` calls show their Typst output.
 
-  Wherever the cursor is, the source appears for editing. Display maths and block calls show a live render under the source while being edited.
+  Wherever the cursor is, the source appears for editing, but only once the user has clicked, typed or moved the cursor, so a freshly opened note shows nothing revealed. Display maths and block calls show a live render under the source while being edited.
 - **"Show Typst" / "Show Markdown"** (⌘⇧T, a header toggle) turns the hiding off for the open note. It swaps one CodeMirror compartment: no conversion, and the document and undo history are untouched. The choice is remembered per note on this device (UI storage, not the vault).
 - **Markdown notes** get the same treatment over `@lezer/markdown` (GFM): headings, emphasis, links, images from the vault, clickable to-do checkboxes, quotes, front matter folded into a "Properties" chip.
 - **The `/` menu** inserts ~20 blocks (headings, lists, quote, callout, maths, code, table, image, link to note, footnote, divider, page break, outline) as plain Typst or Markdown, with snippet placeholders. Images outside the chest are copied into `<chest>/assets/`.

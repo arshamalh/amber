@@ -4,7 +4,7 @@ import { convertFileSrc } from "@tauri-apps/api/core";
 import type { SyntaxNode } from "@lezer/common";
 import { joinPath } from "../backend";
 import { Builder, wikiLinks } from "./context";
-import { BulletWidget, CheckboxWidget, ChipWidget, ImageWidget, RuleWidget } from "./widgets";
+import { BulletWidget, CheckboxWidget, ImageWidget, RuleWidget } from "./widgets";
 
 const NO_WIKI = new Set(["InlineCode", "FencedCode", "CodeBlock", "CodeText", "HTMLBlock", "HTMLTag", "Comment"]);
 
@@ -13,12 +13,9 @@ export function buildMarkdown(b: Builder, notePath: string) {
   if (!tree) return;
   const noteDir = notePath.includes("/") ? notePath.slice(0, notePath.lastIndexOf("/")) : "";
 
-  // YAML front matter folds into a chip.
+  // YAML front matter is hidden in the writing view; Source shows it.
   const fm = /^---\r?\n[\s\S]*?\r?\n---[ \t]*(?:\r?\n|$)/.exec(b.state.doc.toString());
-  if (fm) {
-    const end = fm[0].replace(/\r?\n$/, "").length;
-    if (!b.touches(0, end)) b.blockWidget(0, end, new ChipWidget("Properties", 0));
-  }
+  if (fm) b.hideLines(0, fm[0].replace(/\r?\n$/, "").length);
 
   const visit = (n: SyntaxNode) => {
     const name = n.name;

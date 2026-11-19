@@ -103,33 +103,6 @@ export class NumberWidget extends WidgetType {
   }
 }
 
-/** A collapsed block of setup code (imports, set/show rules) or front matter. */
-export class ChipWidget extends WidgetType {
-  constructor(
-    readonly label: string,
-    readonly pos: number,
-  ) {
-    super();
-  }
-  eq(o: ChipWidget) {
-    return o.label === this.label && o.pos === this.pos;
-  }
-  toDOM(view: EditorView) {
-    const el = document.createElement("div");
-    el.className = "cm-lp-chip";
-    el.textContent = this.label;
-    el.title = "Click to show";
-    el.addEventListener("mousedown", (e) => {
-      e.preventDefault();
-      reveal(view, this.pos);
-    });
-    return el;
-  }
-  ignoreEvent() {
-    return true;
-  }
-}
-
 export class RuleWidget extends WidgetType {
   eq() {
     return true;

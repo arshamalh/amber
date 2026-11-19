@@ -4,7 +4,7 @@ import type { SyntaxNode } from "@lezer/common";
 import { joinPath } from "../backend";
 import { Builder, wikiLinks } from "./context";
 import { fragmentKey } from "./render";
-import { BulletWidget, ChipWidget, NumberWidget, RenderWidget } from "./widgets";
+import { BulletWidget, NumberWidget, RenderWidget } from "./widgets";
 
 /** Calls whose only argument is content are shown as styled text. */
 const STYLE_CALLS: Record<string, string> = {
@@ -34,12 +34,10 @@ export function buildTypst(b: Builder, opts: TypstOptions) {
   const noteDir = opts.notePath.includes("/") ? opts.notePath.slice(0, opts.notePath.lastIndexOf("/")) : "";
   const preamble = collectPreamble(b, root, noteDir);
 
-  // Leading setup lines (#import, #set, #show, #let) fold into one chip.
+  // Leading setup lines (#import, #set, #show, #let) are hidden in the
+  // writing view; Source shows them.
   const setup = leadingSetup(root);
-  if (setup && !b.touches(setup.from, setup.to)) {
-    const lines = b.state.doc.lineAt(setup.to).number - b.state.doc.lineAt(setup.from).number + 1;
-    b.blockWidget(setup.from, setup.to, new ChipWidget(`Typst setup · ${lines} line${lines === 1 ? "" : "s"}`, setup.from));
-  }
+  if (setup) b.hideLines(setup.from, setup.to);
 
   const ctx = { b, noteDir, preamble };
   visitChildren(ctx, root, true);

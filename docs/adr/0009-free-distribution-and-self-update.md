@@ -11,7 +11,7 @@ Unsigned macOS builds show "Amber is damaged" and needed a terminal command, aga
 - **Ad-hoc sign** macOS builds (`signingIdentity: "-"`). The first launch shows the standard "can't verify" message, cleared with **Open Anyway** in System Settings, with no terminal. This happens once per install.
 - **Self-update with `tauri-plugin-updater`**, fed from GitHub Releases. No server: `latest.json` lives at `releases/latest/download/latest.json`. Updates are signed with a free project key (minisign) and verified against the public key in `tauri.conf.json`. Amber downloads updates itself, so they are not quarantined and macOS doesn't re-check them.
 - The check runs a few seconds after startup and can be turned off in Settings ("Check for updates when Amber starts"). Updates install only after the user clicks Update, and never in development builds.
-- Releases are drafts only while building; a final workflow job publishes them as "latest" once every platform has succeeded, so updates never point at missing files. They are no longer marked pre-release, because GitHub's `latest` ignores pre-releases.
+- Releases are drafts only while building; a final workflow job writes `latest.json` from the uploaded update files and signatures (`scripts/updater-json.mjs`), then publishes the release as "latest" once every platform has succeeded, so updates never point at missing files. (Letting each platform job update `latest.json` raced when two finished together.) They are no longer marked pre-release, because GitHub's `latest` ignores pre-releases.
 - Update files (`createUpdaterArtifacts`) are built only in CI (`src-tauri/tauri.updater.conf.json`), so local builds need no key.
 
 ## Alternatives

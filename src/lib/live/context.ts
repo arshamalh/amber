@@ -10,11 +10,39 @@ export class Builder {
   wanted: Fragment[] = [];
   files = new Set<string>();
 
-  constructor(readonly state: EditorState) {}
+  /** Lines hidden in the writing view (setup code, front matter). */
+  prelude: { from: number; to: number } | null = null;
+
+  /**
+   * `active` is false until the user clicks, types or moves the cursor, so
+   * a freshly opened note shows nothing revealed under the initial cursor.
+   */
+  constructor(
+    readonly state: EditorState,
+    readonly active = true,
+  ) {}
 
   /** True when the selection touches [from, to]: show the source there. */
   touches(from: number, to: number): boolean {
+    if (!this.active) return false;
     return this.state.selection.ranges.some((r) => r.from <= to && r.to >= from);
+  }
+
+  /**
+   * Hides whole lines [from, to] plus the blank lines after them. Only the
+   * Source view shows them; the cursor skips over them (see atomic ranges).
+   */
+  hideLines(from: number, to: number) {
+    const doc = this.state.doc;
+    let last = doc.lineAt(to);
+    while (last.number < doc.lines && !/\S/.test(doc.line(last.number + 1).text)) {
+      last = doc.line(last.number + 1);
+    }
+    const a = doc.lineAt(from).from;
+    if (this.isReplaced(a, last.to)) return;
+    this.decos.push(Decoration.replace({ block: true }).range(a, last.to));
+    this.replaced.push([a, last.to]);
+    this.prelude = { from: a, to: last.to };
   }
 
   isReplaced(from: number, to: number): boolean {
