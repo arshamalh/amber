@@ -2,6 +2,7 @@
   import { app } from "../app.svelte";
   import * as api from "../backend";
   import * as actions from "../actions";
+  import { ui } from "../ui.svelte";
   import type { TreeEntry } from "../backend";
 
   interface Node {
@@ -87,7 +88,7 @@
     } else if (node.kind === "note") {
       void app.openNote(node.path);
     } else {
-      void api.revealVaultPath(node.path).catch(app.fail);
+      app.openFile(node.path);
     }
   }
 
@@ -166,7 +167,7 @@
     <li>
       <button
         class="row {node.kind}"
-        class:active={app.note?.path === node.path}
+        class:active={app.note?.path === node.path || (ui.rightOpen && ui.rightTab === "pdf" && app.pdf?.path === node.path)}
         class:selected={node.kind === "dir" && app.selectedDir === node.path}
         style:padding-left="{8 + depth * 14}px"
         class:drop={node.kind === "dir" && dropTarget === node.path}

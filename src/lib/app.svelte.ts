@@ -7,6 +7,8 @@ import type {
   AppInfo, ChestInfo, NoteFormat, NoteSummary, OpenedNote, TreeEntry, VaultView,
 } from "./backend";
 import { Engine } from "./engine";
+import { pageOf, splitDest } from "./pdf";
+import { ui } from "./ui.svelte";
 
 const SAVE_DELAY_MS = 400;
 
@@ -53,6 +55,9 @@ class AppStore {
   engine = $state.raw<Engine | null>(null);
   engineStatus = $state<EngineStatus>("stopped");
   previewUrl = $state<string | null>(null);
+  /** The PDF shown in the side panel. `jump` changes on every request to
+   *  show `page`, so following the same link twice scrolls back to it. */
+  pdf = $state<{ path: string; page: number | null; jump: number; reload: number } | null>(null);
   /** Folder selected in the tree; new notes go here. */
   selectedDir = $state<string | null>(null);
   linksVersion = $state(0);
@@ -213,6 +218,7 @@ class AppStore {
   // ---- chests ---------------------------------------------------------
 
   private closeChest() {
+    this.pdf = null;
     this.chest = null;
     this.tree = [];
     this.notes = [];
@@ -449,6 +455,10 @@ class AppStore {
     await this.flushSave();
     const result = await api.renamePath(from, to);
     const open = this.note?.path;
+    const pdf = this.pdf;
+    if (pdf && (pdf.path === from || pdf.path.startsWith(`${from}/`))) {
+      this.pdf = { ...pdf, path: to + pdf.path.slice(from.length) };
+    }
     await this.refreshChest();
     if (open && (open === from || open.startsWith(`${from}/`))) {
       await this.openNote(to + open.slice(from.length));
@@ -468,6 +478,7 @@ class AppStore {
   async trash(path: string) {
     await this.flushSave();
     await api.trashPath(path);
+    if (this.pdf && (this.pdf.path === path || this.pdf.path.startsWith(`${path}/`))) this.pdf = null;
     const open = this.note?.path;
     if (open && (open === path || open.startsWith(`${path}/`))) {
       this.note = null;
@@ -478,12 +489,39 @@ class AppStore {
     this.toast(`Moved ${api.baseName(path)} to the trash`);
   }
 
-  /** Opens the note a `[[link]]` points to, creating it if it is missing. */
-  follow = async (target: string) => {
-    if (!this.note || !this.chest) return;
+  /** Shows a PDF in the side panel, at `page` if given. */
+  openPdf(path: string, page: number | null = null) {
+    const same = this.pdf?.path === path;
+    this.pdf = { path, page, jump: (this.pdf?.jump ?? 0) + 1, reload: same ? this.pdf!.reload : 0 };
+    ui.rightOpen = true;
+    ui.rightTab = "pdf";
+  }
+
+  /**
+   * Opens a file that isn't a note: PDFs in Amber; anything else is only
+   * shown in the file manager (never run: a vault may come from anyone).
+   */
+  openFile(path: string, page: number | null = null) {
+    if (/\.pdf$/i.test(path)) this.openPdf(path, page);
+    else void api.revealVaultPath(path).catch(this.fail);
+  }
+
+  /**
+   * Opens what a `[[link]]` points to: a note (created if missing), or a
+   * file such as `paper.pdf#page=12`. `dest` is the link without its label.
+   */
+  follow = async (dest: string, from = this.note?.path) => {
+    if (!from || !this.chest) return;
+    const { target, fragment } = splitDest(dest);
     try {
-      const resolved = await api.resolveLink(target, this.note.path);
+      const resolved = await api.resolveLink(target, from);
+      if (resolved && !api.isNotePath(resolved)) return this.openFile(resolved, pageOf(fragment));
       if (resolved) return await this.openNote(resolved);
+      // `[[paper.pdf]]` names a file; don't create a note called that.
+      if (/\.[a-z0-9]{2,5}$/i.test(target) && !api.isNotePath(target)) {
+        this.toast(`There is no file named ${target} in this chest.`, "error");
+        return;
+      }
       const path = this.notePath(target, this.chest.defaultFormat, this.chest.folder);
       await this.createNote(path);
       this.toast(`Created ${api.baseName(path)}`);
@@ -525,6 +563,7 @@ class AppStore {
     const chest = this.chest?.folder;
     if (!chest || !paths.some((p) => p.startsWith(`${chest}/`))) return;
     await this.refreshChest().catch(() => {});
+    if (this.pdf && paths.includes(this.pdf.path)) this.pdf = { ...this.pdf, reload: this.pdf.reload + 1 };
     const note = this.note;
     if (!note || !paths.includes(note.path)) return;
     try {

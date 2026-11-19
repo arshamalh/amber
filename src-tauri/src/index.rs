@@ -11,7 +11,7 @@ use tantivy::schema::{Field, Schema, Value, STORED, STRING, TEXT};
 use tantivy::{doc, Index, IndexReader, IndexWriter, ReloadPolicy, TantivyDocument, Term};
 
 use crate::links::{self, WikiLink};
-use crate::vault::{NoteFormat, Vault};
+use crate::vault::{EntryKind, NoteFormat, Vault};
 
 #[derive(Debug, thiserror::Error)]
 pub enum IndexError {
@@ -66,7 +66,8 @@ struct Fields {
 pub struct ChestIndex {
     chest: String,
     notes: BTreeMap<String, NoteRecord>,
-    /// Sorted paths, kept in sync with `notes`, for link resolution.
+    /// Sorted link targets: every note plus every other file in the chest
+    /// (PDFs, images), so `[[paper.pdf]]` resolves too.
     paths: Vec<String>,
     fields: Fields,
     index: Index,
@@ -97,9 +98,15 @@ impl ChestIndex {
             writer,
             reader,
         };
-        for path in vault.notes_in(chest)? {
-            if let Ok(text) = vault.read_note(&path) {
-                me.insert(&path, &text)?;
+        for entry in vault.tree(chest)? {
+            match entry.kind {
+                EntryKind::Note => {
+                    if let Ok(text) = vault.read_note(&entry.path) {
+                        me.insert(&entry.path, &text)?;
+                    }
+                }
+                EntryKind::File => me.add_file(&entry.path),
+                EntryKind::Dir => {}
             }
         }
         me.commit()?;
@@ -116,9 +123,23 @@ impl ChestIndex {
         self.commit()
     }
 
+    /// Adds a file that is not a note (only a link target).
+    pub fn add_file(&mut self, path: &str) {
+        if let Err(at) = self.paths.binary_search_by(|p| p.as_str().cmp(path)) {
+            self.paths.insert(at, path.to_owned());
+        }
+    }
+
+    /// True if `path` is a known note or file.
+    pub fn contains(&self, path: &str) -> bool {
+        self.paths
+            .binary_search_by(|p| p.as_str().cmp(path))
+            .is_ok()
+    }
+
     pub fn remove(&mut self, path: &str) -> Result<()> {
+        self.paths.retain(|p| p != path);
         if self.notes.remove(path).is_some() {
-            self.paths.retain(|p| p != path);
             self.writer
                 .delete_term(Term::from_field_text(self.fields.path, path));
             self.commit()?;
@@ -409,6 +430,55 @@ mod tests {
         assert_eq!(idx.search("quantum", 10).unwrap()[0].title, "Fresh");
         idx.remove("Notes/new.md").unwrap();
         assert!(idx.search("quantum", 10).unwrap().is_empty());
+    }
+
+    #[test]
+    fn files_are_link_targets() {
+        let (_d, v, _idx) = setup();
+        std::fs::create_dir_all(v.root().join("Notes/papers")).unwrap();
+        std::fs::write(v.root().join("Notes/papers/Paper.pdf"), b"%PDF").unwrap();
+        std::fs::write(
+            v.root().join("Notes/cites.typ"),
+            "See [[paper.pdf\\#page=12]].",
+        )
+        .unwrap();
+        std::fs::write(
+            v.root().join("Notes/cites2.md"),
+            "Also [[papers/Paper.pdf#page=3|the paper]].",
+        )
+        .unwrap();
+        let mut idx = ChestIndex::build(&v, "Notes").unwrap();
+        assert_eq!(
+            idx.resolve("paper.pdf", "Notes/cites.typ").as_deref(),
+            Some("Notes/papers/Paper.pdf")
+        );
+        // The extension is part of a file's name: `[[paper]]` is a note.
+        assert_eq!(idx.resolve("paper", "Notes/cites.typ"), None);
+        let back: Vec<_> = idx
+            .backlinks("Notes/papers/Paper.pdf")
+            .into_iter()
+            .map(|b| b.path)
+            .collect();
+        assert_eq!(back, ["Notes/cites.typ", "Notes/cites2.md"]);
+        assert!(idx.notes().iter().all(|n| !n.path.ends_with(".pdf")));
+
+        // Renaming the PDF offers to update both links, keeping the page.
+        v.rename("Notes/papers/Paper.pdf", "Notes/papers/Smith 2024.pdf")
+            .unwrap();
+        idx.remove("Notes/papers/Paper.pdf").unwrap();
+        idx.add_file("Notes/papers/Smith 2024.pdf");
+        let moves = vec![(
+            "Notes/papers/Paper.pdf".to_owned(),
+            "Notes/papers/Smith 2024.pdf".to_owned(),
+        )];
+        let map = links::RenameMap::new("Notes", &moves, idx.paths());
+        let text = v.read_note("Notes/cites.typ").unwrap();
+        let edits = map.edits("Notes/cites.typ", &text, NoteFormat::Typst);
+        assert_eq!(
+            links::apply(&text, &edits),
+            "See [[Smith 2024.pdf\\#page=12]]."
+        );
+        assert_eq!(idx.link_updates(&moves).len(), 2);
     }
 
     #[test]

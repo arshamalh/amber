@@ -12,6 +12,7 @@
   import FileTree from "./lib/components/FileTree.svelte";
   import SearchPanel from "./lib/components/SearchPanel.svelte";
   import LinksPanel from "./lib/components/LinksPanel.svelte";
+  import PdfViewer from "./lib/components/PdfViewer.svelte";
   import MarkdownPreview from "./lib/components/MarkdownPreview.svelte";
   import CommandPalette from "./lib/components/CommandPalette.svelte";
   import Dialogs from "./lib/components/Dialogs.svelte";
@@ -55,6 +56,7 @@
             format: app.note.format,
             chest: app.chest.folder,
             notes: () => app.notes,
+            pdfs: () => app.tree.filter((e) => e.kind === "file" && /\.pdf$/i.test(e.path)).map((e) => e.path),
             follow: (t) => void app.follow(t),
           }),
           slashMenu({
@@ -289,11 +291,23 @@
             <div class="tabs">
               <button class:on={ui.rightTab === "preview"} onclick={() => (ui.rightTab = "preview")}>Preview</button>
               <button class:on={ui.rightTab === "links"} onclick={() => (ui.rightTab = "links")}>Links</button>
+              {#if app.pdf}
+                <button class="pdf-tab" class:on={ui.rightTab === "pdf"} onclick={() => (ui.rightTab = "pdf")} title={app.pdf.path}>
+                  {api.baseName(app.pdf.path)}
+                </button>
+                <button class="icon" onclick={() => { app.pdf = null; if (ui.rightTab === "pdf") ui.rightTab = "links"; }} title="Close PDF" aria-label="Close PDF">×</button>
+              {/if}
               <span class="spacer"></span>
               <button class="icon" onclick={() => (ui.rightOpen = false)} title="Hide panel">×</button>
             </div>
             <div class="right-body">
-              {#if ui.rightTab === "links"}
+              {#if app.pdf}
+                <!-- Kept alive while other tabs show, so the PDF stays where it was. -->
+                <div class="pdf-host" class:hidden={ui.rightTab !== "pdf"}><PdfViewer /></div>
+              {/if}
+              {#if ui.rightTab === "pdf"}
+                <!-- the PDF above -->
+              {:else if ui.rightTab === "links"}
                 <LinksPanel />
               {:else if app.note?.format === "markdown"}
                 <MarkdownPreview />
@@ -519,8 +533,25 @@
     border-left: 1px solid var(--line);
   }
   .right-body {
+    position: relative;
     min-height: 0;
     background: var(--preview-bg);
+  }
+  .pdf-host {
+    position: absolute;
+    inset: 0;
+    background: var(--bg);
+  }
+  /* Hidden, not removed: the PDF keeps its place while another tab shows. */
+  .pdf-host.hidden {
+    visibility: hidden;
+    pointer-events: none;
+  }
+  .tabs .pdf-tab {
+    max-width: 180px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
   }
   iframe {
     width: 100%;

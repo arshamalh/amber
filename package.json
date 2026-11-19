@@ -23,7 +23,8 @@
     "@lezer/common": "^1.5.5",
     "@tauri-apps/api": "^2.12.4",
     "codemirror": "^6.0.2",
-    "codemirror-lang-typst": "^0.6.0"
+    "codemirror-lang-typst": "^0.6.0",
+    "pdfjs-dist": "^4.10.38"
   },
   "devDependencies": {
     "@sveltejs/vite-plugin-svelte": "^7.3.1",

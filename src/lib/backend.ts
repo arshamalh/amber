@@ -174,6 +174,8 @@ export const revealPath = (path: string) => invoke<void>("reveal_path", { path }
 export const revealVaultPath = (path: string) => invoke<void>("reveal_vault_path", { path });
 export const openExternal = (url: string) => invoke<void>("open_external", { url });
 /** Asks for an image; returns its path relative to the note (copied into the chest if needed). */
+/** Raw bytes of a file in the open chest (the PDF viewer). */
+export const readFile = (path: string) => invoke<ArrayBuffer>("read_file", { path });
 export const pasteAsset = (note: string, bytes: Uint8Array, ext: string, stamp: string) =>
   invoke<string>("paste_asset", bytes, {
     headers: { "x-note": encodeURIComponent(note), "x-ext": ext, "x-stamp": stamp },
@@ -184,6 +186,7 @@ export const importAsset = (note: string) => invoke<string | null>("import_asset
 
 export const baseName = (p: string) => p.slice(p.lastIndexOf("/") + 1);
 export const dirName = (p: string) => (p.includes("/") ? p.slice(0, p.lastIndexOf("/")) : "");
+export const isNotePath = (p: string) => /\.(typ|md)$/i.test(p);
 export const stem = (p: string) => baseName(p).replace(/\.(typ|md)$/, "");
 export const extOf = (f: NoteFormat) => (f === "typst" ? "typ" : "md");
 

@@ -103,6 +103,27 @@ export class NumberWidget extends WidgetType {
   }
 }
 
+/** ", p. 12" after a link to a PDF page; part of the clickable link. */
+export class PageWidget extends WidgetType {
+  constructor(
+    readonly page: string,
+    readonly dest: string,
+  ) {
+    super();
+  }
+  eq(o: PageWidget) {
+    return o.page === this.page && o.dest === this.dest;
+  }
+  toDOM() {
+    const el = document.createElement("span");
+    el.className = "cm-lp-wikilink";
+    el.dataset.lpWiki = this.dest;
+    el.dataset.lpRendered = "1";
+    el.textContent = `, p. ${this.page}`;
+    return el;
+  }
+}
+
 export class RuleWidget extends WidgetType {
   eq() {
     return true;

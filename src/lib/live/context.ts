@@ -2,6 +2,7 @@
 import type { EditorState, Range } from "@codemirror/state";
 import { Decoration, type WidgetType } from "@codemirror/view";
 import type { Fragment } from "./render";
+import { PageWidget } from "./widgets";
 
 export class Builder {
   decos: Range<Decoration>[] = [];
@@ -131,16 +132,22 @@ export function wikiLinks(b: Builder, skip: (pos: number) => boolean) {
     const to = from + m[0].length;
     if (skip(from) || b.isReplaced(from, to)) continue;
     const inner = m[1];
-    const target = inner.split("|")[0].split(/\\?#/)[0].trim();
+    const dest = inner.split("|")[0].trim();
     const bar = inner.indexOf("|");
     const labelFrom = bar >= 0 ? from + 2 + bar + 1 : from + 2;
-    if (!b.touches(from, to)) {
-      b.hide(from, labelFrom);
-      b.hide(to - 2, to);
-    }
     const shown = !b.touches(from, to);
-    b.mark(shown ? labelFrom : from, shown ? to - 2 : to, "cm-lp-wikilink", {
-      "data-lp-wiki": target,
+    // [[paper.pdf\#page=12]] reads "paper.pdf, p. 12".
+    const page = bar < 0 ? /\\?#page=(\d+)\s*$/.exec(inner) : null;
+    let labelTo = to - 2;
+    if (shown) {
+      b.hide(from, labelFrom);
+      if (page) {
+        labelTo = from + 2 + page.index;
+        b.widget(labelTo, to, new PageWidget(page[1], dest));
+      } else b.hide(to - 2, to);
+    }
+    b.mark(shown ? labelFrom : from, shown ? labelTo : to, "cm-lp-wikilink", {
+      "data-lp-wiki": dest,
       "data-lp-rendered": shown ? "1" : "0",
     });
   }

@@ -151,8 +151,19 @@ fn on_vault_changed(app: &AppHandle, paths: Vec<String>) {
         if let Some(idx) = guard.as_mut().filter(|i| i.chest() == chest) {
             for p in paths.iter().filter(|p| vault::chest_of(p) == chest) {
                 if NoteFormat::from_path(p).is_none() {
-                    // A folder (or something else) moved: re-scan everything.
-                    rebuild |= !v.absolute(p).is_ok_and(|a| a.is_file());
+                    let hidden = p.split('/').any(|s| s.starts_with('.'))
+                        || p.ends_with(&format!("/{}", crate::config::CHEST_FILE));
+                    if hidden {
+                        continue;
+                    }
+                    if v.absolute(p).is_ok_and(|a| a.is_file()) {
+                        idx.add_file(p); // a PDF or image: a link target
+                    } else if idx.contains(p) {
+                        let _ = idx.remove(p);
+                    } else {
+                        // A folder (or something else) moved: re-scan everything.
+                        rebuild = true;
+                    }
                     continue;
                 }
                 let result = match v.read_note(p) {
@@ -533,26 +544,29 @@ pub async fn rename_path(
     state.scoped(&to).map_err(err)?;
     let src = v.absolute(&from).map_err(err)?;
     let was_note = NoteFormat::from_path(&from).is_some() && src.is_file();
+    let was_file = !was_note && src.is_file();
     let was_dir = src.is_dir();
     v.rename(&from, &to).map_err(err)?;
     reindex_after_move(&state, &v, &from, &to, was_note)?;
 
-    let moves: Vec<(String, String)> = if was_note && NoteFormat::from_path(&to).is_some() {
-        vec![(from, to)]
-    } else if was_dir {
-        let chest = state.chest().map_err(err)?;
-        let prefix = format!("{to}/");
-        v.notes_in(&chest)
-            .map_err(err)?
-            .into_iter()
-            .filter_map(|p| {
-                let rest = p.strip_prefix(&prefix)?.to_owned();
-                Some((format!("{from}/{rest}"), p))
-            })
-            .collect()
-    } else {
-        Vec::new()
-    };
+    // Every moved link target: notes, and files such as PDFs.
+    let moves: Vec<(String, String)> =
+        if (was_note && NoteFormat::from_path(&to).is_some()) || was_file {
+            vec![(from, to)]
+        } else if was_dir {
+            let prefix = format!("{to}/");
+            with_index(&state, |i| {
+                i.paths()
+                    .iter()
+                    .filter_map(|p| {
+                        let rest = p.strip_prefix(&prefix)?;
+                        Some((format!("{from}/{rest}"), p.clone()))
+                    })
+                    .collect()
+            })?
+        } else {
+            Vec::new()
+        };
     let updates = with_index(&state, |i| i.link_updates(&moves))?;
     Ok(RenameResult {
         links: updates.iter().map(|(_, n)| n).sum(),
@@ -816,6 +830,17 @@ pub async fn import_asset(app: AppHandle, note: String) -> CmdResult<Option<Stri
     };
     let note_dir = note.rsplit_once('/').map_or("", |(d, _)| d);
     Ok(Some(vault::relative_to(note_dir, &target)))
+}
+
+/// The raw bytes of a file in the open chest (for the PDF viewer).
+#[tauri::command]
+pub async fn read_file(
+    path: String,
+    state: State<'_, AppState>,
+) -> CmdResult<tauri::ipc::Response> {
+    let v = state.scoped(&path).map_err(err)?;
+    let bytes = blocking(move || v.read_file(&path).map_err(err)).await?;
+    Ok(tauri::ipc::Response::new(bytes))
 }
 
 /// Saves a pasted image into the chest's assets folder. The body is the

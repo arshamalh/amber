@@ -8,7 +8,7 @@ The full plan, decisions and roadmap are in `docs/PLAN.md`. Read it before non-t
 
 Current phase: **Phase 1 · MVP**. Built: vaults (create with optional git, clone, open, init), chests with `chest.toml`, a chest-scoped file tree, Markdown notes with a preview, `[[links]]` with completion and backlinks, chest-scoped search, templates, PDF export of Typst notes, a command palette. Gate to Phase 2: the owner uses Amber daily for one real chest.
 
-Also built: PDF export for Markdown notes through a Typst conversion, and "Update links?" after renames (ADR 0006); a vault menu and Settings (⌘,).
+Also built: PDF export for Markdown notes through a Typst conversion, and "Update links?" after renames (ADR 0006); a vault menu and Settings (⌘,); pasting images (saved to `<chest>/assets/` as `<folder>_<note>_<timestamp>`); an in-app PDF viewer with `[[paper.pdf#page=12]]` links (ADR 0010).
 
 Phase 2 started (ADR 0007): the default **writing view** hides markup away from the cursor and shows maths and `#function(...)` blocks rendered by Typst; the header's **Writing | Source** switch (⌘⇧T) shows the plain source; a `/` menu inserts blocks. Each chest's `default_format` (chosen at creation, Typst by default, auto-detected for existing folders) sets the format of new notes (ADR 0008). The Tinymist page preview is an optional "Page" view. Still to do in Phase 2: forms for editing blocks, diagram blocks (fletcher, Mermaid), a visual diagram editor, saved views.
 
@@ -21,7 +21,7 @@ Rust core (`src-tauri/src/`):
 - `vault.rs`: all file access, confined to the vault root. Vault/chest creation, tree, note and folder operations, templates.
 - `config.rs`: `amber.toml` / `chest.toml`, read with `toml`, written with `toml_edit` (comments survive).
 - `links.rs`: `[[link]]` parsing and chest-scoped resolution.
-- `index.rs`: the open chest's in-memory index (Tantivy in RAM + link graph). ADR 0004.
+- `index.rs`: the open chest's in-memory index (Tantivy in RAM + link graph). ADR 0004. Every non-note file is a link target too (ADR 0010).
 - `watcher.rs`: file watcher; external edits update the index and reach the UI as `vault-changed`.
 - `typst/`: the Typst engine adapter (Tinymist LSP, PDF compile, `render.rs` for writing-view fragments). The only code that runs Tinymist.
 - `export.rs`, `md2typst.rs`: PDF export; Markdown notes are converted to Typst in a temp folder in the app cache, never the vault.
@@ -35,6 +35,7 @@ UI (`src/`):
 - `lib/engine.ts`: LSP transport over Tauri IPC, `@codemirror/lsp-client`, preview start/stop.
 - `lib/wiki.ts`: `[[link]]` highlighting, Cmd/Ctrl+click, completion in CodeMirror.
 - `lib/typst-lang.ts`: Typst language from `codemirror-lang-typst`'s Lezer parser (no completion/linter from it; Tinymist provides those).
+- `lib/pdf.ts` + `lib/components/PdfViewer.svelte`: the PDF viewer (PDF.js, loaded on first use; ADR 0010). `lib/paste.ts`: pasting images.
 - `lib/live/`: the writing view (ADR 0007). `typst.ts` / `markdown.ts` turn syntax trees into decorations (`context.ts` holds the builder), `widgets.ts`, `render.ts` (fragment cache, batched `render_fragments` calls), `slash.ts` (the `/` menu). Lezer nodes are fresh objects on every access: compare positions, never identity.
 - `lib/components/`: Welcome, FileTree, SearchPanel, LinksPanel, MarkdownPreview, CommandPalette, Dialogs.
 

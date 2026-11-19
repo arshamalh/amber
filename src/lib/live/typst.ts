@@ -134,7 +134,8 @@ function visit(ctx: Ctx, n: SyntaxNode, topLevel: boolean) {
     case "Ref":
       return b.mark(n.from, n.to, "cm-lp-ref");
     case "Escape":
-      if (!b.touches(n.from, n.to)) b.hide(n.from, n.from + 1);
+      // `\#` inside [[Note\#Heading]] or [[paper.pdf\#page=3]] belongs to the link.
+      if (!b.touches(n.from, n.to) && !inWikiLink(b, n.from)) b.hide(n.from, n.from + 1);
       return;
     case "Linebreak":
       if (!b.touches(n.from, n.to)) b.mark(n.from, n.to, "cm-lp-dim");
@@ -145,6 +146,16 @@ function visit(ctx: Ctx, n: SyntaxNode, topLevel: boolean) {
     default:
       return visitChildren(ctx, n, topLevel && (n.name === "Markup" || n.name === "Typst"));
   }
+}
+
+/** True if `pos` is inside a `[[...]]` on its line. */
+function inWikiLink(b: Builder, pos: number): boolean {
+  const line = b.state.doc.lineAt(pos);
+  for (const m of line.text.matchAll(/\[\[[^[\]\n]+\]\]/g)) {
+    const from = line.from + m.index!;
+    if (pos > from && pos < from + m[0].length) return true;
+  }
+  return false;
 }
 
 /** `#expr`: setup lines, styled text calls, or a rendered fragment. */

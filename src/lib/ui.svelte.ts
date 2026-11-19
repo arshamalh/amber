@@ -35,7 +35,7 @@ class UiStore {
   palette = $state<PaletteMode | null>(null);
   sidebar = $state<"files" | "search">("files");
   sidebarOpen = $state(true);
-  rightTab = $state<"preview" | "links">("preview");
+  rightTab = $state<"preview" | "links" | "pdf">("preview");
   /** The side panel (page view / links) starts closed: writing comes first. */
   rightOpen = $state(false);
   /** Bumped to focus the search box. */

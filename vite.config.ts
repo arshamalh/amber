@@ -1,11 +1,44 @@
-import { defineConfig } from "vite";
+import { defineConfig, type Plugin } from "vite";
 import { svelte } from "@sveltejs/vite-plugin-svelte";
+import { readFileSync, readdirSync } from "node:fs";
+import { join } from "node:path";
+import { fileURLToPath } from "node:url";
+
+/**
+ * Serves PDF.js's character maps and standard fonts at /pdfjs/ (dev) and
+ * copies them into the build, so PDFs that don't embed fonts still render.
+ */
+function pdfjsData(): Plugin {
+  const dirs = ["cmaps", "standard_fonts"];
+  const root = fileURLToPath(new URL("node_modules/pdfjs-dist", import.meta.url));
+  return {
+    name: "amber-pdfjs-data",
+    configureServer(server) {
+      server.middlewares.use("/pdfjs/", (req, res, next) => {
+        const [dir, file] = (req.url ?? "").replace(/^\//, "").split("?")[0].split("/");
+        if (!dirs.includes(dir) || !file || file.includes("..")) return next();
+        try {
+          res.end(readFileSync(join(root, dir, decodeURIComponent(file))));
+        } catch {
+          next();
+        }
+      });
+    },
+    generateBundle() {
+      for (const dir of dirs) {
+        for (const file of readdirSync(join(root, dir))) {
+          this.emitFile({ type: "asset", fileName: `pdfjs/${dir}/${file}`, source: readFileSync(join(root, dir, file)) });
+        }
+      }
+    },
+  };
+}
 
 const host = process.env.TAURI_DEV_HOST;
 
 // https://v2.tauri.app/start/frontend/vite/
 export default defineConfig({
-  plugins: [svelte()],
+  plugins: [svelte(), pdfjsData()],
   clearScreen: false,
   server: {
     port: 1420,

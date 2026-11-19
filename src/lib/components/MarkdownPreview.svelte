@@ -38,8 +38,8 @@
     e.preventDefault();
     const href = a.getAttribute("href") ?? "";
     if (a.dataset.wikilink) {
-      const target = decodeURIComponent(href).split("#")[0];
-      if (target) void app.follow(target);
+      const dest = decodeURIComponent(href);
+      if (dest && !dest.startsWith("#")) void app.follow(dest);
     } else if (/^(https?:|mailto:)/i.test(href)) {
       void api.openExternal(href).catch(app.fail);
     } else if (href.startsWith("#")) {
