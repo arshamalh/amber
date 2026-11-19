@@ -530,6 +530,70 @@ pub fn import_into_assets(vault: &Vault, chest: &str, source: &Path) -> Result<S
     Ok(format!("{chest}/assets/{candidate}"))
 }
 
+/// Image types that can be pasted into a note.
+pub const PASTE_EXTS: &[&str] = &["png", "jpg", "gif", "webp", "svg"];
+
+/// Saves pasted image bytes as `<chest>/assets/<folder>_<note>_<stamp>.<ext>`,
+/// all lowercase with no spaces. `folder` is the note's folder (the chest
+/// for notes at its top). `stamp` comes from the UI in local time
+/// (`YYYYMMDD-HHMMSS`). Returns the new vault-relative path.
+pub fn paste_into_assets(
+    vault: &Vault,
+    note: &str,
+    stamp: &str,
+    ext: &str,
+    bytes: &[u8],
+) -> Result<String> {
+    if !PASTE_EXTS.contains(&ext) {
+        return Err(VaultError::InvalidName(format!("image type .{ext}")));
+    }
+    if stamp.is_empty() || !stamp.chars().all(|c| c.is_ascii_digit() || c == '-') {
+        return Err(VaultError::InvalidName(stamp.to_owned()));
+    }
+    let chest = chest_of(note);
+    let (dir, file) = note.rsplit_once('/').unwrap_or(("", note));
+    let folder = dir.rsplit('/').next().unwrap_or(chest);
+    let stem = file.rsplit_once('.').map_or(file, |(s, _)| s);
+    let base = format!("{}_{}_{stamp}", slug(folder), slug(stem));
+    let assets = vault.resolve(&format!("{chest}/assets"))?;
+    fs::create_dir_all(&assets)?;
+    let mut name = format!("{base}.{ext}");
+    let mut n = 2;
+    while assets.join(&name).exists() {
+        name = format!("{base}-{n}.{ext}");
+        n += 1;
+    }
+    check_name(&name)?;
+    use std::io::Write;
+    fs::OpenOptions::new()
+        .write(true)
+        .create_new(true)
+        .open(assets.join(&name))?
+        .write_all(bytes)?;
+    Ok(format!("{chest}/assets/{name}"))
+}
+
+/// Lowercase, whitespace runs as `-`, without characters that are unsafe
+/// in file names or that would clash with the `_` separator.
+fn slug(s: &str) -> String {
+    let mut out = String::new();
+    for c in s.trim().chars().flat_map(char::to_lowercase) {
+        if c.is_whitespace() || c == '_' {
+            if !out.ends_with('-') {
+                out.push('-');
+            }
+        } else if !c.is_control() && !"/\\<>:\"|?*.#[]".contains(c) {
+            out.push(c);
+        }
+    }
+    let out = out.trim_matches('-');
+    if out.is_empty() {
+        "note".to_owned()
+    } else {
+        out.to_owned()
+    }
+}
+
 /// A vault with one Typst chest, "Notes", holding `Welcome.typ` (for tests).
 #[cfg(test)]
 pub fn test_vault(parent: &Path) -> Vault {
@@ -715,6 +779,36 @@ mod tests {
         assert_eq!(chests[0].folder, "Notes");
         assert_eq!(v.notes_in("Notes").unwrap(), ["Notes/Welcome.typ"]);
         assert!(v.root().join("_shared/amber.typ").is_file());
+    }
+
+    #[test]
+    fn pasted_images_get_note_based_names() {
+        let (_d, v) = vault();
+        let paste =
+            |note: &str| paste_into_assets(&v, note, "20261119-173000", "png", b"img").unwrap();
+        assert_eq!(
+            paste("Notes/Welcome.typ"),
+            "Notes/assets/notes_welcome_20261119-173000.png"
+        );
+        assert_eq!(
+            paste("Notes/Welcome.typ"),
+            "Notes/assets/notes_welcome_20261119-173000-2.png"
+        );
+        assert_eq!(
+            paste("Notes/Deep Work/Meeting  Notes_v2.md"),
+            "Notes/assets/deep-work_meeting-notes-v2_20261119-173000.png"
+        );
+        assert_eq!(
+            paste("Notes/Ünï Côde/Ça Va?.typ"),
+            "Notes/assets/ünï-côde_ça-va_20261119-173000.png"
+        );
+        assert_eq!(
+            v.read_file("Notes/assets/notes_welcome_20261119-173000.png")
+                .unwrap(),
+            b"img"
+        );
+        assert!(paste_into_assets(&v, "Notes/a.typ", "1", "exe", b"x").is_err());
+        assert!(paste_into_assets(&v, "Notes/a.typ", "../x", "png", b"x").is_err());
     }
 
     #[test]

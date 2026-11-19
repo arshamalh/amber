@@ -165,6 +165,7 @@ pub fn run() {
             commands::engine_send,
             commands::render_fragments,
             commands::import_asset,
+            commands::paste_asset,
         ])
         .build(tauri::generate_context!())
         .expect("error while building Amber");

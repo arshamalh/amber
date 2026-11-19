@@ -818,6 +818,32 @@ pub async fn import_asset(app: AppHandle, note: String) -> CmdResult<Option<Stri
     Ok(Some(vault::relative_to(note_dir, &target)))
 }
 
+/// Saves a pasted image into the chest's assets folder. The body is the
+/// raw image; headers carry `x-note` (percent-encoded vault path), `x-ext`
+/// and `x-stamp`. Returns the path relative to the note.
+#[tauri::command]
+pub async fn paste_asset(
+    request: tauri::ipc::Request<'_>,
+    state: State<'_, AppState>,
+) -> CmdResult<String> {
+    let tauri::ipc::InvokeBody::Raw(bytes) = request.body() else {
+        return Err("expected the image as raw bytes".into());
+    };
+    let header = |k: &str| {
+        request
+            .headers()
+            .get(k)
+            .and_then(|v| v.to_str().ok())
+            .map(uri::percent_decode)
+            .ok_or_else(|| format!("missing {k}"))
+    };
+    let (note, ext, stamp) = (header("x-note")?, header("x-ext")?, header("x-stamp")?);
+    let v = state.scoped(&note).map_err(err)?;
+    let target = vault::paste_into_assets(&v, &note, &stamp, &ext, bytes).map_err(err)?;
+    let note_dir = note.rsplit_once('/').map_or("", |(d, _)| d);
+    Ok(vault::relative_to(note_dir, &target))
+}
+
 // ---- Typst engine -----------------------------------------------------------------
 
 /// What the engine channel carries to the UI.

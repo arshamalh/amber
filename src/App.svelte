@@ -6,6 +6,7 @@
   import { wikiLinks } from "./lib/wiki";
   import { livePreview } from "./lib/live";
   import { slashMenu } from "./lib/live/slash";
+  import { pasteImages } from "./lib/paste";
   import Editor from "./lib/Editor.svelte";
   import Welcome from "./lib/components/Welcome.svelte";
   import FileTree from "./lib/components/FileTree.svelte";
@@ -59,6 +60,11 @@
           slashMenu({
             format: app.note.format,
             pickImage: () => api.importAsset(app.note!.path).catch((e) => (app.fail(e), null)),
+          }),
+          pasteImages({
+            format: app.note.format,
+            save: (bytes, ext, stamp) => api.pasteAsset(app.note!.path, bytes, ext, stamp),
+            fail: (e) => app.fail(e),
           }),
         ]
       : [],
