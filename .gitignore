@@ -6,3 +6,9 @@ src-tauri/gen/
 src-tauri/binaries/*
 !src-tauri/binaries/.gitkeep
 .DS_Store
+
+# Demo video: scratch renders and the Remotion project build output
+demo/vault/.render/
+demo/video/out/
+demo/video/public/
+demo/.frames/

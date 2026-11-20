@@ -4,6 +4,12 @@
 
 Amber is an open-source, local-first notes app for people who want real typesetting, not just Markdown. Every note is a plain `.typ` or `.md` file in a folder you choose. Every project lives in its own **chest**, so a large vault stays organized.
 
+<p align="center">
+  <a href="docs/media/amber-demo.mp4"><img src="docs/media/amber-demo.gif" alt="Amber in action: writing with live maths, linking to a page of a PDF, and switching between Writing, Source and Rendered" width="880"></a>
+  <br>
+  <sub><a href="docs/media/amber-demo.mp4">▶ Watch the full demo (50 s)</a></sub>
+</p>
+
 > **Status:** Phase 1 (MVP) in testing. Vaults and chests, Typst and Markdown notes with live preview, `[[links]]` and backlinks, search, templates and PDF export work today. Block toolbars, diagrams, books and Markdown export are still to come; see [`docs/PLAN.md`](docs/PLAN.md).
 
 ## Our promise
