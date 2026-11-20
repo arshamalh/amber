@@ -186,7 +186,9 @@ const theme = EditorView.theme({
   ".cm-lp-setup-line, .cm-lp-code-src, .cm-lp-math-src": { fontFamily: "var(--mono)", fontSize: "0.88em" },
   ".cm-lp-bullet, .cm-lp-number": { color: "var(--muted)", display: "inline-block", minWidth: "0.9em" },
   ".cm-lp-task": { margin: "0 4px 0 0", verticalAlign: "middle", accentColor: "var(--accent)" },
-  ".cm-lp-hr": { borderTop: "1px solid var(--line)", margin: "10px 0" },
+  // No margins on block widgets: CodeMirror doesn't measure them, so clicks
+  // below would land lower than the pointer. The line is drawn in the middle.
+  ".cm-lp-hr": { height: "21px", background: "linear-gradient(var(--line), var(--line)) center / 100% 1px no-repeat" },
   ".cm-lp-render": { cursor: "pointer" },
   ".cm-lp-render img": { verticalAlign: "middle", maxWidth: "100%" },
   ".cm-lp-render-block": { display: "block", textAlign: "center", padding: "6px 0" },
