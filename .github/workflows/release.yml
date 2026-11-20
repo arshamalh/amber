@@ -66,10 +66,13 @@ jobs:
           rustup toolchain install
           rustup target add ${{ matrix.target }}
 
+      # Filled on `main` by warm-cache.yml: a tag can't read another tag's
+      # cache, so saving one here would only cost time.
       - uses: Swatinem/rust-cache@v2
         with:
           workspaces: src-tauri
-          key: ${{ matrix.target }}
+          shared-key: release-${{ matrix.target }}
+          save-if: false
 
       - name: Update-signing key is configured
         shell: bash

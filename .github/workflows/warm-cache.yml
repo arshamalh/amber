@@ -1,0 +1,80 @@
+name: Warm release cache
+
+# Release builds run on tags, and a tag can't read another tag's cache, only
+# the default branch's. So this builds each release target on `main` to fill
+# the Rust cache that release.yml restores (same `shared-key`). Without it,
+# every release compiles all ~360 crates from scratch.
+# Runs when dependencies change, and weekly because GitHub drops caches
+# unused for 7 days.
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - src-tauri/Cargo.lock
+      - src-tauri/rust-toolchain.toml
+      - .github/workflows/warm-cache.yml
+  schedule:
+    - cron: "17 4 * * 1"
+  workflow_dispatch:
+
+concurrency:
+  group: warm-cache
+  cancel-in-progress: true
+
+jobs:
+  warm:
+    name: ${{ matrix.name }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include: # keep in step with release.yml
+          - name: Linux x64
+            os: ubuntu-22.04
+            target: x86_64-unknown-linux-gnu
+          - name: macOS Apple Silicon
+            os: macos-latest
+            target: aarch64-apple-darwin
+          - name: macOS Intel
+            os: macos-latest
+            target: x86_64-apple-darwin
+          - name: Windows x64
+            os: windows-latest
+            target: x86_64-pc-windows-msvc
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Linux system packages
+        if: runner.os == 'Linux'
+        run: |
+          APT="-o Acquire::Retries=3 -o Acquire::http::Timeout=30 -o Acquire::https::Timeout=30"
+          sudo apt-get $APT update
+          sudo apt-get $APT install -y libwebkit2gtk-4.1-dev libayatana-appindicator3-dev \
+            librsvg2-dev libxdo-dev libssl-dev patchelf build-essential
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Rust toolchain (pinned in src-tauri/rust-toolchain.toml)
+        working-directory: src-tauri
+        shell: bash
+        run: |
+          rustup toolchain install
+          rustup target add ${{ matrix.target }}
+
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: src-tauri
+          shared-key: release-${{ matrix.target }}
+
+      - run: npm ci
+      - name: Fetch Tinymist sidecar
+        run: node scripts/fetch-tinymist.mjs ${{ matrix.target }}
+
+      # The same build as a release (profile, target, features), minus the
+      # installers and update signing, so the cached crates match.
+      - run: npx tauri build --target ${{ matrix.target }} --no-bundle

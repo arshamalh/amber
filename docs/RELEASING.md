@@ -26,6 +26,8 @@ Common emoji: ✨ new, ⚡️ faster, 🎨 look, 🐛 fix, 🔒 safety, 📄 exp
 
 This checks that the notes exist, bumps the version everywhere, commits (with the notes), tags and pushes. The tag runs `.github/workflows/release.yml`, which builds installers for Linux, macOS (Apple Silicon and Intel) and Windows, together with signed update files and `latest.json`. They collect in a draft release that is **published automatically once all four platforms have built**. If any build fails, the release stays a draft: fix the problem and release a new version, or publish the draft by hand if the failure doesn't matter.
 
+Release builds reuse compiled Rust dependencies from a cache that `.github/workflows/warm-cache.yml` fills on `main` (tags can't share caches with each other). It runs when `Cargo.lock` changes and weekly; run it by hand from the Actions tab if a release ever starts from a cold cache.
+
 Publishing is what delivers the update. Installed copies of Amber read
 `https://github.com/arshamalh/amber/releases/latest/download/latest.json`, and GitHub's `latest` skips drafts and pre-releases.
 
