@@ -176,6 +176,9 @@ export const openExternal = (url: string) => invoke<void>("open_external", { url
 /** Asks for an image; returns its path relative to the note (copied into the chest if needed). */
 /** Raw bytes of a file in the open chest (the PDF viewer). */
 export const readFile = (path: string) => invoke<ArrayBuffer>("read_file", { path });
+/** Writes a file dropped in from outside to `path` (vault path); returns where it went. */
+export const importFile = (path: string, bytes: Uint8Array) =>
+  invoke<string>("import_file", bytes, { headers: { "x-path": encodeURIComponent(path) } });
 export const pasteAsset = (note: string, bytes: Uint8Array, ext: string, stamp: string) =>
   invoke<string>("paste_asset", bytes, {
     headers: { "x-note": encodeURIComponent(note), "x-ext": ext, "x-stamp": stamp },

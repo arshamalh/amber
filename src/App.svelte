@@ -88,6 +88,28 @@
     void app.setPreviewWanted(ui.rightOpen && ui.rightTab === "preview");
   });
 
+  /** Drags a pane divider; the width is remembered on this device. */
+  function resize(e: PointerEvent, pane: "sidebar" | "right") {
+    if (e.button !== 0) return;
+    e.preventDefault();
+    const handle = e.currentTarget as HTMLElement;
+    handle.setPointerCapture(e.pointerId); // keeps events while over the PDF or page view
+    const startX = e.clientX;
+    const start = pane === "sidebar" ? ui.sidebarWidth : (handle.parentElement?.offsetWidth ?? 400);
+    const move = (m: PointerEvent) => {
+      const dx = m.clientX - startX;
+      if (pane === "sidebar") ui.sidebarWidth = Math.round(Math.min(520, Math.max(160, start + dx)));
+      else ui.rightWidth = Math.round(Math.min(window.innerWidth - (ui.sidebarOpen ? ui.sidebarWidth : 0) - 300, Math.max(260, start - dx)));
+    };
+    const up = () => {
+      handle.removeEventListener("pointermove", move);
+      ui.saveWidths();
+    };
+    handle.addEventListener("pointermove", move);
+    handle.addEventListener("pointerup", up, { once: true });
+    handle.addEventListener("pointercancel", up, { once: true });
+  }
+
   let vaultMenu = $state(false);
   const otherRecents = $derived((app.info?.recentVaults ?? []).filter((p) => p !== app.vault?.root).slice(0, 6));
 
@@ -123,6 +145,16 @@
     </main>
   {:else}
     <header>
+      <button
+        class="ghost sidebar-toggle"
+        class:on={ui.sidebarOpen}
+        onclick={() => (ui.sidebarOpen = !ui.sidebarOpen)}
+        title="{ui.sidebarOpen ? 'Hide' : 'Show'} sidebar (⌘\)"
+        aria-label="Toggle sidebar"
+        aria-pressed={ui.sidebarOpen}
+      >
+        <svg viewBox="0 0 16 16" aria-hidden="true"><rect x="1.5" y="2.5" width="13" height="11" rx="2" /><path d="M6 2.5v11" /></svg>
+      </button>
       <div class="vault-wrap">
         <button
           class="crumb"
@@ -242,10 +274,12 @@
     {:else}
       <main
         class="panes"
-        style:grid-template-columns="{ui.sidebarOpen ? 'minmax(200px, 260px)' : ''} minmax(0, 1fr) {ui.rightOpen ? 'minmax(0, 1fr)' : ''}"
+        style:grid-template-columns="{ui.sidebarOpen ? `${ui.sidebarWidth}px` : ''} minmax(0, 1fr) {ui.rightOpen ? (ui.rightWidth ? `${ui.rightWidth}px` : 'minmax(0, 1fr)') : ''}"
       >
         {#if ui.sidebarOpen}
           <aside class="sidebar">
+            <!-- svelte-ignore a11y_no_static_element_interactions -->
+            <div class="resizer right" onpointerdown={(e) => resize(e, "sidebar")} title="Drag to resize"></div>
             <div class="tabs">
               <button class:on={ui.sidebar === "files"} onclick={() => (ui.sidebar = "files")}>Files</button>
               <button class:on={ui.sidebar === "search"} onclick={() => ui.showSearch()}>Search</button>
@@ -288,6 +322,8 @@
 
         {#if ui.rightOpen}
           <section class="right-pane">
+            <!-- svelte-ignore a11y_no_static_element_interactions -->
+            <div class="resizer left" onpointerdown={(e) => resize(e, "right")} title="Drag to resize"></div>
             <div class="tabs">
               <button class:on={ui.rightTab === "preview"} onclick={() => (ui.rightTab = "preview")}>Preview</button>
               <button class:on={ui.rightTab === "links"} onclick={() => (ui.rightTab = "links")}>Links</button>
@@ -492,10 +528,44 @@
     min-height: 0;
   }
   .sidebar {
+    position: relative;
     display: grid;
     grid-template-rows: auto 1fr;
     min-height: 0;
+    min-width: 0;
     border-right: 1px solid var(--line);
+  }
+  /* Pane dividers: a wide, invisible grab area over the border line. */
+  .resizer {
+    position: absolute;
+    top: 0;
+    bottom: 0;
+    width: 7px;
+    z-index: 5;
+    cursor: col-resize;
+    touch-action: none;
+  }
+  .resizer.right {
+    right: -4px;
+  }
+  .resizer.left {
+    left: -4px;
+  }
+  .resizer:hover,
+  .resizer:active {
+    background: color-mix(in srgb, var(--accent) 35%, transparent);
+  }
+  .sidebar-toggle {
+    display: grid;
+    place-items: center;
+    padding: 4px 6px;
+  }
+  .sidebar-toggle svg {
+    width: 16px;
+    height: 16px;
+    fill: none;
+    stroke: currentColor;
+    stroke-width: 1.3;
   }
   .sidebar-body {
     overflow: auto;
@@ -526,6 +596,7 @@
     min-height: 0;
   }
   .right-pane {
+    position: relative;
     display: grid;
     grid-template-rows: auto 1fr;
     min-width: 0;

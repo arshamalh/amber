@@ -843,6 +843,34 @@ pub async fn read_file(
     Ok(tauri::ipc::Response::new(bytes))
 }
 
+/// Writes a file dropped onto the file tree from outside Amber. The body is
+/// the raw file; `x-path` is the percent-encoded destination in the chest.
+/// Returns the path written (another name if that one was taken).
+#[tauri::command]
+pub async fn import_file(
+    request: tauri::ipc::Request<'_>,
+    state: State<'_, AppState>,
+) -> CmdResult<String> {
+    // shortcut: the whole file crosses IPC in memory; stream it if huge drops matter.
+    let tauri::ipc::InvokeBody::Raw(bytes) = request.body() else {
+        return Err("expected the file as raw bytes".into());
+    };
+    let rel = request
+        .headers()
+        .get("x-path")
+        .and_then(|v| v.to_str().ok())
+        .map(uri::percent_decode)
+        .ok_or("missing x-path")?;
+    let v = state.scoped(&rel).map_err(err)?;
+    let written = vault::import_bytes(&v, &rel, bytes).map_err(err)?;
+    let indexed = match v.read_note(&written) {
+        Ok(text) => with_index(&state, |i| i.upsert(&written, &text))?.map_err(err),
+        Err(_) => with_index(&state, |i| i.add_file(&written)),
+    };
+    indexed?;
+    Ok(written)
+}
+
 /// Saves a pasted image into the chest's assets folder. The body is the
 /// raw image; headers carry `x-note` (percent-encoded vault path), `x-ext`
 /// and `x-stamp`. Returns the path relative to the note.

@@ -3,5 +3,5 @@
   "identifier": "default",
   "description": "Main window. The UI reaches files only through Amber's own commands.",
   "windows": ["main"],
-  "permissions": ["core:default"]
+  "permissions": ["core:default", "core:webview:allow-set-webview-zoom"]
 }

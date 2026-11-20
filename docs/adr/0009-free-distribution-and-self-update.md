@@ -25,5 +25,5 @@ Unsigned macOS builds show "Amber is damaged" and needed a terminal command, aga
 
 - Each user approves Amber once, on first install.
 - Losing the update key means installed copies can't update; it must be backed up.
-- To verify on real machines: a published release with the updater, then a newer one, updating with no prompt. macOS may ask once for "App Management" permission when Amber replaces itself.
+- Verified on macOS (2026-11-19): an installed copy updated itself to v0.1.3 from inside the app. macOS asks once for "App Management" permission the first time Amber replaces itself.
 - Checking for updates contacts GitHub (the user's IP is visible to it); the setting allows turning it off.

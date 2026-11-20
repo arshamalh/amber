@@ -5,4 +5,4 @@
 - 🍎 **macOS:** open Amber, then **System Settings → Privacy & Security → Open Anyway**.
 - 🪟 **Windows:** on the SmartScreen notice, click **More info → Run anyway**.
 
-🔄 Already installed? Amber updates itself: **Settings → Updates**.
+🔄 Already installed? Amber updates itself: **Settings → Updates**. On macOS, allow **App Management** the first time it asks.

@@ -30,16 +30,36 @@ export type Dialog =
 
 export type PaletteMode = "notes" | "commands" | "chests";
 
+function readLocal(key: string): string | null {
+  try {
+    return localStorage.getItem(key);
+  } catch {
+    return null;
+  }
+}
+
 class UiStore {
   dialog = $state<Dialog | null>(null);
   palette = $state<PaletteMode | null>(null);
   sidebar = $state<"files" | "search">("files");
   sidebarOpen = $state(true);
+  /** Pane widths in px, set by dragging the dividers. `rightWidth` 0 = half. */
+  sidebarWidth = $state(Number(readLocal("amber:sidebar-width")) || 240);
+  rightWidth = $state(Number(readLocal("amber:right-width")) || 0);
   rightTab = $state<"preview" | "links" | "pdf">("preview");
   /** The side panel (page view / links) starts closed: writing comes first. */
   rightOpen = $state(false);
   /** Bumped to focus the search box. */
   searchFocus = $state(0);
+
+  saveWidths() {
+    try {
+      localStorage.setItem("amber:sidebar-width", String(this.sidebarWidth));
+      localStorage.setItem("amber:right-width", String(this.rightWidth));
+    } catch {
+      /* storage unavailable */
+    }
+  }
 
   open(d: Dialog) {
     this.palette = null;

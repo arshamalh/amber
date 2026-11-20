@@ -166,6 +166,7 @@ pub fn run() {
             commands::render_fragments,
             commands::import_asset,
             commands::paste_asset,
+            commands::import_file,
             commands::read_file,
         ])
         .build(tauri::generate_context!())

@@ -519,15 +519,47 @@ pub fn import_into_assets(vault: &Vault, chest: &str, source: &Path) -> Result<S
     };
     let dir = vault.resolve(&format!("{chest}/assets"))?;
     fs::create_dir_all(&dir)?;
-    let mut candidate = name.clone();
+    let candidate = free_name(&dir, &stem, &ext);
+    check_name(&candidate)?;
+    fs::copy(source, dir.join(&candidate))?;
+    Ok(format!("{chest}/assets/{candidate}"))
+}
+
+/// `stem + ext` in `dir`, or `stem-1 + ext`, `stem-2 + ext`… if taken.
+fn free_name(dir: &Path, stem: &str, ext: &str) -> String {
+    let mut candidate = format!("{stem}{ext}");
     let mut n = 1;
     while dir.join(&candidate).exists() {
         candidate = format!("{stem}-{n}{ext}");
         n += 1;
     }
-    check_name(&candidate)?;
-    fs::copy(source, dir.join(&candidate))?;
-    Ok(format!("{chest}/assets/{candidate}"))
+    candidate
+}
+
+/// Writes a file dropped in from outside the app at `rel` (folders are
+/// created; a taken name gets `-1`, `-2`…). Returns the path written.
+pub fn import_bytes(vault: &Vault, rel: &str, bytes: &[u8]) -> Result<String> {
+    // Every part is a plain, visible name: no hidden files in the vault.
+    for part in rel.split('/') {
+        check_name(part)?;
+    }
+    let (dir, name) = rel
+        .rsplit_once('/')
+        .ok_or_else(|| VaultError::InvalidName(rel.to_owned()))?;
+    let abs_dir = vault.resolve(dir)?;
+    fs::create_dir_all(&abs_dir)?;
+    let (stem, ext) = match name.rsplit_once('.') {
+        Some((s, e)) if !s.is_empty() => (s, format!(".{e}")),
+        _ => (name, String::new()),
+    };
+    let name = free_name(&abs_dir, stem, &ext);
+    use std::io::Write;
+    fs::OpenOptions::new()
+        .write(true)
+        .create_new(true)
+        .open(abs_dir.join(&name))?
+        .write_all(bytes)?;
+    Ok(format!("{dir}/{name}"))
 }
 
 /// Image types that can be pasted into a note.
@@ -784,6 +816,32 @@ mod tests {
         assert_eq!(chests[0].folder, "Notes");
         assert_eq!(v.notes_in("Notes").unwrap(), ["Notes/Welcome.typ"]);
         assert!(v.root().join("_shared/amber.typ").is_file());
+    }
+
+    #[test]
+    fn dropped_files_are_imported_without_overwriting() {
+        let (_d, v) = vault();
+        assert_eq!(
+            import_bytes(&v, "Notes/paper.pdf", b"a").unwrap(),
+            "Notes/paper.pdf"
+        );
+        assert_eq!(
+            import_bytes(&v, "Notes/paper.pdf", b"b").unwrap(),
+            "Notes/paper-1.pdf"
+        );
+        assert_eq!(
+            import_bytes(&v, "Notes/Trip/day 1.md", b"c").unwrap(),
+            "Notes/Trip/day 1.md"
+        );
+        assert_eq!(v.read_file("Notes/paper.pdf").unwrap(), b"a");
+        for bad in [
+            "Notes/.hidden",
+            "Notes/../x.md",
+            "Notes/.git/config",
+            "paper.pdf",
+        ] {
+            assert!(import_bytes(&v, bad, b"x").is_err(), "{bad}");
+        }
     }
 
     #[test]

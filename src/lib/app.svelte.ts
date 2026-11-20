@@ -444,6 +444,46 @@ class AppStore {
     await this.openNote(created);
   }
 
+  /** Copies files and folders dropped from outside into `dir` (a chest folder). */
+  async importDropped(entries: FileSystemEntry[], dir: string) {
+    const files: { path: string; file: File }[] = [];
+    const walk = async (entry: FileSystemEntry, at: string): Promise<void> => {
+      if (entry.name.startsWith(".")) return; // .DS_Store, .git: no hidden files in the vault
+      if (entry.isFile) {
+        const file = await new Promise<File>((ok, fail) => (entry as FileSystemFileEntry).file(ok, fail));
+        files.push({ path: `${at}/${entry.name}`, file });
+        return;
+      }
+      const reader = (entry as FileSystemDirectoryEntry).createReader();
+      // readEntries returns the folder in batches; an empty batch ends it.
+      for (;;) {
+        const batch = await new Promise<FileSystemEntry[]>((ok, fail) => reader.readEntries(ok, fail));
+        if (!batch.length) break;
+        for (const child of batch) await walk(child, `${at}/${entry.name}`);
+      }
+    };
+    try {
+      for (const entry of entries) await walk(entry, dir);
+    } catch (e) {
+      return this.fail(e);
+    }
+    if (!files.length) return;
+    this.busy = `Copying ${files.length} file${files.length === 1 ? "" : "s"}…`;
+    let copied = 0;
+    try {
+      for (const { path, file } of files) {
+        await api.importFile(path, new Uint8Array(await file.arrayBuffer()));
+        copied++;
+      }
+    } catch (e) {
+      this.fail(e);
+    } finally {
+      this.busy = null;
+      await this.refreshChest();
+    }
+    if (copied) this.toast(`Copied ${copied} file${copied === 1 ? "" : "s"} into ${api.baseName(dir)}`);
+  }
+
   async createFolder(path: string) {
     await api.createFolder(path);
     await this.refreshChest();

@@ -112,9 +112,12 @@
   let dropTarget = $state<string | null>(null);
   let expandTimer: ReturnType<typeof setTimeout> | undefined;
 
+  /** Files dragged in from Finder / Explorer (not a row of this tree). */
+  const fromOutside = (e: DragEvent) => !dragging && !!e.dataTransfer?.types.includes("Files");
+
   function canDrop(target: string) {
     const d = dragging;
-    if (!d) return false;
+    if (!d) return true; // files from outside can go anywhere in the chest
     if (api.dirName(d.path) === target) return false; // already there
     if (d.kind === "dir" && (target === d.path || target.startsWith(`${d.path}/`))) return false;
     return true;
@@ -128,14 +131,15 @@
   }
 
   function onDragOver(e: DragEvent, target: string, expandable = false) {
-    if (!dragging) return;
+    const outside = fromOutside(e);
+    if (!dragging && !outside) return;
     e.stopPropagation();
     if (!canDrop(target)) {
       dropTarget = null;
       return;
     }
     e.preventDefault(); // allow dropping here
-    if (e.dataTransfer) e.dataTransfer.dropEffect = "move";
+    if (e.dataTransfer) e.dataTransfer.dropEffect = outside ? "copy" : "move";
     if (dropTarget !== target) {
       dropTarget = target;
       clearTimeout(expandTimer);
@@ -147,6 +151,13 @@
   async function onDrop(e: DragEvent, target: string) {
     e.preventDefault();
     e.stopPropagation();
+    if (fromOutside(e)) {
+      // Read the entries now: the DataTransfer is emptied after this event.
+      const entries = [...(e.dataTransfer?.items ?? [])].map((i) => i.webkitGetAsEntry()).filter((x) => !!x);
+      endDrag();
+      await app.importDropped(entries, target);
+      return;
+    }
     const node = dragging;
     const ok = !!node && canDrop(target); // before endDrag() clears `dragging`
     endDrag();
