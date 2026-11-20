@@ -38,8 +38,15 @@ export function buildMarkdown(b: Builder, notePath: string) {
     } else if (name === "FencedCode" || name === "CodeBlock") {
       b.lines(n.from, n.to, "cm-lp-codeblock");
       if (name === "FencedCode") {
+        const doc = b.state.doc;
         b.line(n.from, "cm-lp-fence");
-        b.line(n.to, "cm-lp-fence");
+        if (doc.lineAt(n.to).number !== doc.lineAt(n.from).number) b.line(n.to, "cm-lp-fence");
+        // Hide the ``` marks (the language name stays) unless the cursor is on that fence line.
+        for (let c = n.firstChild; c; c = c.nextSibling) {
+          if (c.name !== "CodeMark") continue;
+          const line = doc.lineAt(c.from);
+          if (!b.touches(line.from, line.to)) b.hide(c.from, c.to);
+        }
       }
       return;
     } else if (name === "Link") {

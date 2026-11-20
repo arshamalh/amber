@@ -174,6 +174,7 @@ The phases have no dates on purpose. Pass each gate before starting the next pha
 
 - [ ] **Theme switcher:** light, dark and more themes. Keep the current theme as the default.
 - [ ] **Right-to-left support:** RTL text (Persian, Arabic, Hebrew) in the editor, writing view, file tree and PDF export, including mixed RTL and LTR lines.
+- [ ] **Code blocks in Typst notes:** what Markdown notes have, for Typst ` ```rust ` raw blocks: highlighting by language, fences hidden in Writing, and the closing fence added on Enter. The Typst grammar doesn't hand raw blocks to other languages yet, so this needs a nested-language setup.
 - [ ] **Google Drive and Dropbox:** connect a vault to a cloud folder from inside Amber. A vault inside an already-synced folder works today; this is about connecting without a desktop sync client.
 
 ## Decisions
