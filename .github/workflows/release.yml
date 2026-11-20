@@ -13,8 +13,43 @@ permissions:
   contents: write
 
 jobs:
+  # One draft for all platforms, made before they start: when each platform
+  # job created it, jobs starting in the same second made two drafts and the
+  # files were split between them (v0.1.6).
+  draft:
+    name: Create draft release
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    env:
+      GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+    outputs:
+      id: ${{ steps.create.outputs.id }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Release notes
+        run: |
+          file="docs/releases/${GITHUB_REF_NAME}.md"
+          if [ ! -f "$file" ]; then
+            echo "::error::Missing $file. See docs/RELEASING.md."
+            exit 1
+          fi
+          # docs/releases/<tag>.md + the install footer; also shown by the updater.
+          { cat "$file"; echo; cat docs/releases/_footer.md; } > notes.md
+
+      - name: Create the draft (or reuse it on a re-run)
+        id: create
+        run: |
+          id=$(gh release view "$GITHUB_REF_NAME" --json databaseId -q .databaseId 2>/dev/null || true)
+          if [ -z "$id" ]; then
+            gh release create "$GITHUB_REF_NAME" --draft --verify-tag --title "Amber $GITHUB_REF_NAME" --notes-file notes.md
+            id=$(gh release view "$GITHUB_REF_NAME" --json databaseId -q .databaseId)
+          fi
+          echo "id=$id" >> "$GITHUB_OUTPUT"
+
   release:
     name: ${{ matrix.name }}
+    needs: draft
     strategy:
       fail-fast: false
       matrix:
@@ -84,23 +119,6 @@ jobs:
             exit 1
           fi
 
-      - name: Release notes
-        id: notes
-        shell: bash
-        run: |
-          file="docs/releases/${GITHUB_REF_NAME}.md"
-          if [ ! -f "$file" ]; then
-            echo "::error::Missing $file. See docs/RELEASING.md."
-            exit 1
-          fi
-          {
-            echo "body<<AMBER_NOTES_EOF"
-            cat "$file"
-            echo
-            cat docs/releases/_footer.md
-            echo "AMBER_NOTES_EOF"
-          } >> "$GITHUB_OUTPUT"
-
       - run: npm ci
       - name: Fetch Tinymist sidecar
         run: node scripts/fetch-tinymist.mjs ${{ matrix.target }}
@@ -113,14 +131,9 @@ jobs:
           TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
           TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
         with:
-          tagName: ${{ github.ref_name }}
-          releaseName: Amber ${{ github.ref_name }}
-          # docs/releases/<tag>.md + the install footer; also shown by the updater.
-          releaseBody: ${{ steps.notes.outputs.body }}
-          # A draft while the platforms build; the publish job below makes it
+          # The draft from the job above; the publish job below makes it
           # public (and reachable through latest.json) when all have succeeded.
-          releaseDraft: true
-          prerelease: false
+          releaseId: ${{ needs.draft.outputs.id }}
           # latest.json is written once by the publish job; parallel jobs
           # updating it raced (one deleted it while another read it).
           includeUpdaterJson: false
