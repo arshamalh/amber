@@ -357,10 +357,22 @@ class AppStore {
     return `amber:source:${this.vault?.root}:${path}`;
   }
 
+  /** "Rendered": the note as Typst / Markdown renders it, read-only, in place of the editor. */
+  rendered = $state(false);
+
   toggleSource() {
     if (!this.note) return;
+    this.rendered = false;
     this.sourceMode = !this.sourceMode;
     local.set(this.sourceKey(this.note.path), this.sourceMode ? "1" : "0");
+  }
+
+  /** The header's Writing | Source | Rendered switch. */
+  setMode(mode: "writing" | "source" | "rendered") {
+    if (!this.note) return;
+    if (mode === "rendered") return void (this.rendered = true);
+    this.rendered = false;
+    if ((mode === "source") !== this.sourceMode) this.toggleSource();
   }
 
   private async startPreview() {

@@ -85,7 +85,7 @@
 
   // Tinymist's page preview runs only while the page view is open.
   $effect(() => {
-    void app.setPreviewWanted(ui.rightOpen && ui.rightTab === "preview");
+    void app.setPreviewWanted((ui.rightOpen && ui.rightTab === "preview") || app.rendered);
   });
 
   /** Drags a pane divider; the width is remembered on this device. */
@@ -123,6 +123,18 @@
 </script>
 
 <svelte:window {onkeydown} onclick={() => (vaultMenu = false)} />
+
+{#snippet renderedNote()}
+  {#if app.note?.format === "markdown"}
+    <MarkdownPreview />
+  {:else if app.previewUrl}
+    <iframe src={app.previewUrl} title="Rendered note"></iframe>
+  {:else if app.note}
+    <p class="hint pad">
+      {app.engineStatus === "running" ? "Rendering…" : `Typst engine is ${app.engineStatus}.`}
+    </p>
+  {/if}
+{/snippet}
 
 <div class="app">
   {#if app.booting}
@@ -204,36 +216,32 @@
         <button class="ghost" onclick={() => ui.showSearch()} title="Search (⌘⇧F)">Search</button>
       {/if}
       {#if app.note}
-        <div class="segmented" role="group" aria-label="View mode (⌘⇧T switches)">
+        <div class="segmented" role="group" aria-label="View mode (⌘⇧T switches Writing and Source)">
           <button
-            class:on={!app.sourceMode}
-            aria-pressed={!app.sourceMode}
-            onclick={() => app.sourceMode && app.toggleSource()}
+            class:on={!app.rendered && !app.sourceMode}
+            aria-pressed={!app.rendered && !app.sourceMode}
+            onclick={() => app.setMode("writing")}
             title="Writing: formatted, markup hidden until you click into it (⌘⇧T)"
           >
             Writing
           </button>
           <button
-            class:on={app.sourceMode}
-            aria-pressed={app.sourceMode}
-            onclick={() => !app.sourceMode && app.toggleSource()}
+            class:on={!app.rendered && app.sourceMode}
+            aria-pressed={!app.rendered && app.sourceMode}
+            onclick={() => app.setMode("source")}
             title="Source: the plain {app.note.format === 'typst' ? 'Typst' : 'Markdown'} text (⌘⇧T)"
           >
             Source
           </button>
+          <button
+            class:on={app.rendered}
+            aria-pressed={app.rendered}
+            onclick={() => app.setMode("rendered")}
+            title="Rendered: the note as it prints, read-only"
+          >
+            Rendered
+          </button>
         </div>
-        <button
-          class="ghost toggle"
-          class:on={ui.rightOpen && ui.rightTab === "preview"}
-          onclick={() => {
-            const showing = ui.rightOpen && ui.rightTab === "preview";
-            ui.rightOpen = !showing;
-            ui.rightTab = "preview";
-          }}
-          title="Page view: how the note prints"
-        >
-          Page
-        </button>
         <button class="ghost" onclick={() => app.exportPdf()} title="Export PDF (⌘E)">PDF</button>
       {/if}
       <button class="ghost" onclick={() => (ui.palette = "commands")} title="All commands (⌘⇧P)">⋯</button>
@@ -296,16 +304,20 @@
         {/if}
 
         <section class="editor-pane">
+          {#if app.note && app.rendered}
+            <div class="rendered-full">{@render renderedNote()}</div>
+          {/if}
           {#if app.note}
+            <!-- Hidden, not removed, in Rendered mode: undo history and scroll survive. -->
             {#key `${app.note.path}:${app.editorKey}`}
-              <Editor
+              <div class="editor-host" class:hidden={app.rendered}><Editor
                 note={{ ...app.note, text: app.liveText }}
                 client={app.engineStatus === "running" ? (app.engine?.client ?? null) : null}
                 extensions={wiki}
                 {writing}
                 source={app.sourceMode}
                 onchange={app.onEdit}
-              />
+              /></div>
             {/key}
           {:else}
             <div class="center">
@@ -325,7 +337,7 @@
             <!-- svelte-ignore a11y_no_static_element_interactions -->
             <div class="resizer left" onpointerdown={(e) => resize(e, "right")} title="Drag to resize"></div>
             <div class="tabs">
-              <button class:on={ui.rightTab === "preview"} onclick={() => (ui.rightTab = "preview")}>Preview</button>
+              <button class:on={ui.rightTab === "preview"} onclick={() => (ui.rightTab = "preview")}>Rendered</button>
               <button class:on={ui.rightTab === "links"} onclick={() => (ui.rightTab = "links")}>Links</button>
               {#if app.pdf}
                 <button class="pdf-tab" class:on={ui.rightTab === "pdf"} onclick={() => (ui.rightTab = "pdf")} title={app.pdf.path}>
@@ -345,14 +357,8 @@
                 <!-- the PDF above -->
               {:else if ui.rightTab === "links"}
                 <LinksPanel />
-              {:else if app.note?.format === "markdown"}
-                <MarkdownPreview />
-              {:else if app.previewUrl}
-                <iframe src={app.previewUrl} title="Preview"></iframe>
-              {:else if app.note}
-                <p class="hint pad">
-                  {app.engineStatus === "running" ? "Starting preview…" : `Typst engine is ${app.engineStatus}.`}
-                </p>
+              {:else}
+                {@render renderedNote()}
               {/if}
             </div>
           </section>
@@ -594,6 +600,17 @@
   .editor-pane {
     min-width: 0;
     min-height: 0;
+  }
+  .editor-host {
+    height: 100%;
+  }
+  .editor-host.hidden {
+    display: none;
+  }
+  .rendered-full {
+    height: 100%;
+    overflow: auto;
+    background: var(--preview-bg);
   }
   .right-pane {
     position: relative;

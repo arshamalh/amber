@@ -108,7 +108,13 @@ pub async fn render(req: Request<'_>) -> Result<Vec<Rendered>, String> {
 
 /// The Typst document: the note's preamble, then one page per fragment.
 fn document(preamble: &str, fragments: &[Fragment]) -> String {
-    let mut src = String::from(preamble);
+    // A fragment is rendered without the rest of its note, so `@label` often
+    // points at something not here (a figure further down): show the label's
+    // name instead of failing. First, so the note's own `show ref` rules win.
+    let mut src = String::from(
+        "#show ref: it => if query(it.target).len() == 0 { text(fill: luma(110), str(it.target)) } else { it }\n",
+    );
+    src.push_str(preamble);
     src.push_str(&format!(
         "\n#set text(size: {TEXT_SIZE_PT}pt)\n#set par(justify: false)\n"
     ));
@@ -311,6 +317,11 @@ mod tests {
                 code: "#figure(image(\"img/dot.svg\", width: 1cm), caption: [Dot #twice(1)])"
                     .into(),
             },
+            // A reference to a label elsewhere in the note.
+            Fragment {
+                kind: Kind::Inline,
+                code: "#emph[In @fig-elsewhere, $t$]".into(),
+            },
             // A title page: one page of its own size, not one page inside another.
             Fragment {
                 kind: Kind::Block,
@@ -338,7 +349,7 @@ mod tests {
         let ok = render(req(&v, preamble, &frags, &files, &ws))
             .await
             .unwrap();
-        assert_eq!(ok.len(), 4);
+        assert_eq!(ok.len(), 5);
         for r in &ok {
             assert!(
                 r.svg.as_deref().is_some_and(|s| s.starts_with("<svg")),
@@ -353,7 +364,7 @@ mod tests {
             ok[0].width_pt
         );
         assert!((ok[1].width_pt - BLOCK_WIDTH_PT as f32).abs() < 1.0);
-        assert!((ok[3].width_pt - 300.0).abs() < 1.0 && (ok[3].height_pt - 200.0).abs() < 1.0);
+        assert!((ok[4].width_pt - 300.0).abs() < 1.0 && (ok[4].height_pt - 200.0).abs() < 1.0);
 
         // One broken fragment: the others still render.
         let mut broken = frags.clone();
@@ -368,7 +379,11 @@ mod tests {
             .await
             .unwrap();
         assert!(mixed[0].svg.is_some() && mixed[2].svg.is_some() && mixed[3].svg.is_some());
-        assert!(mixed[4].svg.is_some(), "{:?}", mixed[4].error);
+        assert!(
+            mixed[4].svg.is_some() && mixed[5].svg.is_some(),
+            "{:?}",
+            mixed[5].error
+        );
         assert!(
             mixed[1]
                 .error
