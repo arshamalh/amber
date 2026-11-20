@@ -113,6 +113,13 @@ fn document(preamble: &str, fragments: &[Fragment]) -> String {
         "\n#set text(size: {TEXT_SIZE_PT}pt)\n#set par(justify: false)\n"
     ));
     for f in fragments {
+        // `#page(...)[...]` is already a page (a title page, say): wrapping
+        // it would make two pages, so it renders as itself, at its own size.
+        let code = f.code.trim_start();
+        if code.starts_with("#page(") || code.starts_with("#page[") {
+            src.push_str(&format!("{}\n", f.code));
+            continue;
+        }
         let width = match f.kind {
             Kind::Inline => "auto".to_owned(),
             Kind::Block => format!("{BLOCK_WIDTH_PT}pt"),
@@ -304,6 +311,12 @@ mod tests {
                 code: "#figure(image(\"img/dot.svg\", width: 1cm), caption: [Dot #twice(1)])"
                     .into(),
             },
+            // A title page: one page of its own size, not one page inside another.
+            Fragment {
+                kind: Kind::Block,
+                code: "#page(width: 300pt, height: 200pt, margin: 1cm)[#v(1fr) #align(center)[Title #twice(1)]]"
+                    .into(),
+            },
         ];
         let files = vec!["Notes/img/dot.svg".to_owned()];
         fn req<'a>(
@@ -325,7 +338,7 @@ mod tests {
         let ok = render(req(&v, preamble, &frags, &files, &ws))
             .await
             .unwrap();
-        assert_eq!(ok.len(), 3);
+        assert_eq!(ok.len(), 4);
         for r in &ok {
             assert!(
                 r.svg.as_deref().is_some_and(|s| s.starts_with("<svg")),
@@ -340,6 +353,7 @@ mod tests {
             ok[0].width_pt
         );
         assert!((ok[1].width_pt - BLOCK_WIDTH_PT as f32).abs() < 1.0);
+        assert!((ok[3].width_pt - 300.0).abs() < 1.0 && (ok[3].height_pt - 200.0).abs() < 1.0);
 
         // One broken fragment: the others still render.
         let mut broken = frags.clone();
@@ -354,6 +368,7 @@ mod tests {
             .await
             .unwrap();
         assert!(mixed[0].svg.is_some() && mixed[2].svg.is_some() && mixed[3].svg.is_some());
+        assert!(mixed[4].svg.is_some(), "{:?}", mixed[4].error);
         assert!(
             mixed[1]
                 .error
