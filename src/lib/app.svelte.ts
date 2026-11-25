@@ -58,6 +58,8 @@ class AppStore {
   /** The PDF shown in the side panel. `jump` changes on every request to
    *  show `page`, so following the same link twice scrolls back to it. */
   pdf = $state<{ path: string; page: number | null; jump: number; reload: number } | null>(null);
+  /** The image shown in the side panel. */
+  image = $state<string | null>(null);
   /** Folder selected in the tree; new notes go here. */
   selectedDir = $state<string | null>(null);
   linksVersion = $state(0);
@@ -219,6 +221,7 @@ class AppStore {
 
   private closeChest() {
     this.pdf = null;
+    this.image = null;
     this.chest = null;
     this.tree = [];
     this.notes = [];
@@ -511,6 +514,8 @@ class AppStore {
     if (pdf && (pdf.path === from || pdf.path.startsWith(`${from}/`))) {
       this.pdf = { ...pdf, path: to + pdf.path.slice(from.length) };
     }
+    const image = this.image;
+    if (image && (image === from || image.startsWith(`${from}/`))) this.image = to + image.slice(from.length);
     await this.refreshChest();
     if (open && (open === from || open.startsWith(`${from}/`))) {
       await this.openNote(to + open.slice(from.length));
@@ -531,6 +536,7 @@ class AppStore {
     await this.flushSave();
     await api.trashPath(path);
     if (this.pdf && (this.pdf.path === path || this.pdf.path.startsWith(`${path}/`))) this.pdf = null;
+    if (this.image && (this.image === path || this.image.startsWith(`${path}/`))) this.image = null;
     const open = this.note?.path;
     if (open && (open === path || open.startsWith(`${path}/`))) {
       this.note = null;
@@ -550,11 +556,16 @@ class AppStore {
   }
 
   /**
-   * Opens a file that isn't a note: PDFs in Amber; anything else is only
+   * Opens a file that isn't a note: PDFs and images in Amber; anything else is only
    * shown in the file manager (never run: a vault may come from anyone).
    */
   openFile(path: string, page: number | null = null) {
     if (/\.pdf$/i.test(path)) this.openPdf(path, page);
+    else if (/\.(png|jpe?g|gif|webp|avif|svg)$/i.test(path)) {
+      this.image = path;
+      ui.rightOpen = true;
+      ui.rightTab = "image";
+    }
     else void api.revealVaultPath(path).catch(this.fail);
   }
 

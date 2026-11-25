@@ -9,6 +9,7 @@
   import { Compartment, Prec, type Extension } from "@codemirror/state";
   import type { LSPClient } from "@codemirror/lsp-client";
   import { typst } from "./typst-lang";
+  import { editingHelpers } from "./editing";
   import type { OpenedNote } from "./backend";
 
   interface Props {
@@ -95,6 +96,7 @@
         EditorView.lineWrapping,
         theme,
         lang,
+        editingHelpers,
         lsp,
         extensions,
         mode.of(untrack(() => (source ? [] : writing))),

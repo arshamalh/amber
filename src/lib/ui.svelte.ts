@@ -46,7 +46,7 @@ class UiStore {
   /** Pane widths in px, set by dragging the dividers. `rightWidth` 0 = half. */
   sidebarWidth = $state(Number(readLocal("amber:sidebar-width")) || 240);
   rightWidth = $state(Number(readLocal("amber:right-width")) || 0);
-  rightTab = $state<"preview" | "links" | "pdf">("preview");
+  rightTab = $state<"preview" | "links" | "pdf" | "image">("preview");
   /** The side panel (page view / links) starts closed: writing comes first. */
   rightOpen = $state(false);
   /** Bumped to focus the search box. */

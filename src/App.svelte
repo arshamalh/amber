@@ -2,6 +2,7 @@
   import { app } from "./lib/app.svelte";
   import { ui } from "./lib/ui.svelte";
   import * as actions from "./lib/actions";
+  import { convertFileSrc } from "@tauri-apps/api/core";
   import * as api from "./lib/backend";
   import { wikiLinks } from "./lib/wiki";
   import { livePreview } from "./lib/live";
@@ -345,6 +346,12 @@
                 </button>
                 <button class="icon" onclick={() => { app.pdf = null; if (ui.rightTab === "pdf") ui.rightTab = "links"; }} title="Close PDF" aria-label="Close PDF">×</button>
               {/if}
+              {#if app.image}
+                <button class="pdf-tab" class:on={ui.rightTab === "image"} onclick={() => (ui.rightTab = "image")} title={app.image}>
+                  {api.baseName(app.image)}
+                </button>
+                <button class="icon" onclick={() => { app.image = null; if (ui.rightTab === "image") ui.rightTab = "links"; }} title="Close image" aria-label="Close image">×</button>
+              {/if}
               <span class="spacer"></span>
               <button class="icon" onclick={() => (ui.rightOpen = false)} title="Hide panel">×</button>
             </div>
@@ -355,6 +362,8 @@
               {/if}
               {#if ui.rightTab === "pdf"}
                 <!-- the PDF above -->
+              {:else if ui.rightTab === "image" && app.image}
+                <div class="image-view"><img src={convertFileSrc(app.image, "amberfile")} alt={api.baseName(app.image)} /></div>
               {:else if ui.rightTab === "links"}
                 <LinksPanel />
               {:else}
@@ -634,6 +643,20 @@
   .pdf-host.hidden {
     visibility: hidden;
     pointer-events: none;
+  }
+  .image-view {
+    position: absolute;
+    inset: 0;
+    display: grid;
+    place-items: center;
+    padding: 16px;
+    overflow: auto;
+    background: var(--bg);
+  }
+  .image-view img {
+    max-width: 100%;
+    max-height: 100%;
+    object-fit: contain;
   }
   .tabs .pdf-tab {
     max-width: 180px;

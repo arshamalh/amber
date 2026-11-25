@@ -8,7 +8,7 @@ The full plan, decisions and roadmap are in `docs/PLAN.md`. Read it before non-t
 
 Current phase: **Phase 1 · MVP**. Built: vaults (create with optional git, clone, open, init), chests with `chest.toml`, a chest-scoped file tree, Markdown notes with a preview, `[[links]]` with completion and backlinks, chest-scoped search, templates, PDF export of Typst notes, a command palette. Gate to Phase 2: the owner uses Amber daily for one real chest.
 
-Also built: PDF export for Markdown notes through a Typst conversion, and "Update links?" after renames (ADR 0006); a vault menu and Settings (⌘,); pasting images (saved to `<chest>/assets/` as `<folder>_<note>_<timestamp>`); an in-app PDF viewer with `[[paper.pdf#page=12]]` links (ADR 0010).
+Also built: PDF export for Markdown notes through a Typst conversion, and "Update links?" after renames (ADR 0006); a vault menu and Settings (⌘,); pasting images (saved to `<chest>/assets/` as `<folder>_<note>_<timestamp>`); an image viewer in the side panel; an in-app PDF viewer with `[[paper.pdf#page=12]]` links (ADR 0010).
 
 Phase 2 started (ADR 0007): the default **writing view** hides markup away from the cursor and shows maths and `#function(...)` blocks rendered by Typst; the header's **Writing | Source** switch (⌘⇧T) shows the plain source; a `/` menu inserts blocks. Each chest's `default_format` (chosen at creation, Typst by default, auto-detected for existing folders) sets the format of new notes (ADR 0008). The Tinymist page preview is an optional "Page" view. Still to do in Phase 2: forms for editing blocks, diagram blocks (fletcher, Mermaid), a visual diagram editor, saved views.
 
