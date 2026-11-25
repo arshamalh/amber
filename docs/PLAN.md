@@ -176,6 +176,9 @@ The phases have no dates on purpose. Pass each gate before starting the next pha
 - [ ] **Right-to-left support:** RTL text (Persian, Arabic, Hebrew) in the editor, writing view, file tree and PDF export, including mixed RTL and LTR lines.
 - [ ] **Code blocks in Typst notes:** what Markdown notes have, for Typst ` ```rust ` raw blocks: highlighting by language, fences hidden in Writing, and the closing fence added on Enter. The Typst grammar doesn't hand raw blocks to other languages yet, so this needs a nested-language setup.
 - [ ] **Google Drive and Dropbox:** connect a vault to a cloud folder from inside Amber. A vault inside an already-synced folder works today; this is about connecting without a desktop sync client.
+- [ ] **CSV view:** open `.csv` files as a table in the side panel, like images. Read-only first, with a small built-in parser (quoted fields), no new library. Then cell editing that saves back to the file. Typst notes can already show one with `#table(..csv("data.csv").flatten())`.
+- [ ] **Excel files:** open `.xlsx` read-only in the same table view, parsed in Rust with `calamine`. Never write `.xlsx` (formatting and formulas would be lost); offer "Save as CSV" instead.
+- [ ] **Extensions:** a way to add file viewers (CSV, Excel, others) and similar features without making the core app heavy. Needs its own decision (ADR) first: what an extension can do, how it is loaded, and how it stays safe with vaults that come from anyone.
 
 ## Decisions
 
